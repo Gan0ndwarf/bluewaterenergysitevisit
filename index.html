@@ -833,128 +833,215 @@ function updatePartQty(i,val){currentVisit.requiredParts[i].qty=val;saveVisits()
 function removePart(i){if(!confirm("Remove this part?"))return;currentVisit.requiredParts.splice(i,1);saveVisits();renderParts();}
 
 
+
 /* ---------------- PDF EXPORT ---------------- */
-function blobToDataURL(blob){return new Promise(res=>{const fr=new FileReader();fr.onload=e=>res(e.target.result);fr.readAsDataURL(blob);});}
-async function addImagesFullWidth(doc,y,refs,label){
-  if(!refs||!refs.length)return y;
-  doc.setFontSize(12);doc.setTextColor(0,0,0);
-  doc.text(label,12,y);y+=8;
-  const maxW=186;
-  for(const id of refs){
-    const blob=await getBlob(id);if(!blob)continue;
-    const dataUrl=await blobToDataURL(blob);
-    const props=doc.getImageProperties(dataUrl);
-    const w=Math.min(maxW,props.width?maxW:maxW);
-    const h=(props.height/props.width)*w;
-    if(y+h>280){doc.addPage();y=20;}
-    doc.addImage(dataUrl,'JPEG',12,y,w,h);
-    y+=h+8;
+function blobToDataURL(blob) {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = e => res(e.target.result);
+    fr.readAsDataURL(blob);
+  });
+}
+
+// Optimized grid-based image function
+async function addImagesGrid(doc, y, refs, label) {
+  if (!refs?.length) return y;
+
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text(label, 12, y);
+  y += 8;
+
+  const pageWidth = 186; // Usable page width
+  const gap = 4;         // Space between images
+  const perRowMax = 4;   // Max images per row
+
+  let rowImages = [];
+  let rowCount = 0;
+  let rowMaxHeight = 0;
+
+  for (let i = 0; i < refs.length; i++) {
+    const id = refs[i];
+    const blob = await getBlob(id);
+    if (!blob) continue;
+    const dataUrl = await blobToDataURL(blob);
+    const props = doc.getImageProperties(dataUrl);
+
+    const perRow = Math.min(perRowMax, refs.length - i + rowCount);
+    const imgW = (pageWidth - (perRow - 1) * gap) / perRow;
+    const imgH = (props.height / props.width) * imgW;
+
+    rowImages.push({ dataUrl, type: dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG", w: imgW, h: imgH });
+    rowMaxHeight = Math.max(rowMaxHeight, imgH);
+    rowCount++;
+
+    // Render row if full or last image
+    if (rowCount >= perRow || i === refs.length - 1) {
+      if (y + rowMaxHeight > 280) {
+        doc.addPage();
+        y = 20;
+      }
+
+      let x = 12;
+      for (const img of rowImages) {
+        doc.addImage(img.dataUrl, img.type, x, y, img.w, img.h);
+        x += img.w + gap;
+      }
+
+      y += rowMaxHeight + gap;
+      rowImages = [];
+      rowCount = 0;
+      rowMaxHeight = 0;
+    }
+  }
+
+  return y;
+}
+
+function addTextBlock(doc, y, label, val) {
+  if (val === undefined || val === null || String(val).trim() === "") return y;
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+
+  const lines = doc.splitTextToSize(`${label}: ${val}`, 186);
+  for (const line of lines) {
+    if (y > 280) { doc.addPage(); y = 20; }
+    doc.text(line, 12, y);
+    y += 6;
+  }
+  y += 2;
+  return y;
+}
+
+function addSection(doc, y, title) {
+  doc.setFontSize(14);
+  doc.setTextColor(11, 105, 255);
+  if (y > 270) { doc.addPage(); y = 20; }
+  doc.text(title, 12, y);
+  y += 7;
+
+  doc.setDrawColor(11, 105, 255);
+  doc.setLineWidth(0.5);
+  doc.line(12, y, 198, y);
+  y += 8;
+
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  return y;
+}
+
+function addRequiredEquipmentToPDF(doc, y) {
+  y = addSection(doc, y, "Required Equipment");
+  if (currentVisit?.requiredParts?.length) {
+    currentVisit.requiredParts.forEach(p => {
+      y = addTextBlock(doc, y, p.part, "Qty: " + p.qty);
+    });
+  } else {
+    y = addTextBlock(doc, y, "No Equipment Listed", "");
   }
   return y;
 }
-function addTextBlock(doc,y,label,val){
-  if(val===undefined||val===null||String(val).trim()==="")return y;
-  doc.setFontSize(12);doc.setTextColor(0,0,0);
-  const lines=doc.splitTextToSize(`${label}: ${val}`,186);
-  for(const line of lines){if(y>280){doc.addPage();y=20;}doc.text(line,12,y);y+=6;}
-  y+=2;return y;
-}
-function addSection(doc,y,title){
-  doc.setFontSize(14);doc.setTextColor(11,105,255);
-  if(y>270){doc.addPage();y=20;}
-  doc.text(title,12,y);y+=7;
-  doc.setDrawColor(11,105,255);doc.setLineWidth(0.5);doc.line(12,y,198,y);
-  y+=8;doc.setFontSize(12);doc.setTextColor(0,0,0);
-  return y;
-}
-function addRequiredEquipmentToPDF(doc,y){
-  y=addSection(doc,y,"Required Equipment");
-  if(currentVisit?.requiredParts?.length){
-    currentVisit.requiredParts.forEach(p=>{
-      y=addTextBlock(doc,y,p.part,"Qty: "+p.qty);
-    });
-  }else{y=addTextBlock(doc,y,"No Equipment Listed","");}
-  return y;
-}
-document.getElementById("exportPDFBtn").onclick=async()=>{
-  const {jsPDF}=window.jspdf;const doc=new jsPDF();let y=20;
-   const ok = await validateRequiredFields();
+
+document.getElementById("exportPDFBtn").onclick = async () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  const ok = await validateRequiredFields();
   if (!ok) return; // STOP export if missing required fields
-  y=addSection(doc,y,"Site Info");
-  y=addTextBlock(doc,y,"Site Title",currentVisit?.svSiteTitle);
-  y=addTextBlock(doc,y,"Date",currentVisit?.svDate);
-  y=addTextBlock(doc,y,"Team Members",currentVisit?.svTeam);
-  y=addTextBlock(doc,y,"Time Departed Shop",currentVisit?.svDepart);
-  y=addTextBlock(doc,y,"Arrival Time at Site",currentVisit?.svArrival);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svHomePic,"Home Pictures");
-  y=addSection(doc,y,"Roof Assessment");
-  y=addTextBlock(doc,y,"Roof Assessed",currentVisit?.svRoofAssessed);
-  y=addTextBlock(doc,y,"Type of Roof",currentVisit?.svRoofType);
-  y=addTextBlock(doc,y,"Condition of Roof",currentVisit?.svRoofCondition);
-  y=addTextBlock(doc,y,"Drone Flight Completed",currentVisit?.svDrone);
-  y=addTextBlock(doc,y,"Attic Inspection",currentVisit?.svAttic);
-  y=addTextBlock(doc,y,"Top Chord Size",currentVisit?.svTopChord);
-  y=addTextBlock(doc,y,"Bottom Chord Size",currentVisit?.svBottomChord);
-  y=addTextBlock(doc,y,"Truss Spacing",currentVisit?.svTrussSpacing);
-  y=addTextBlock(doc,y,"Top Chord Span",currentVisit?.svTopSpan);
-  y=addTextBlock(doc,y,"Roof Access Issues",currentVisit?.svRoofIssues);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svAtticPics,"Attic Pictures");
-  y=addSection(doc,y,"Electrical Service");
-  y=addTextBlock(doc,y,"Service Inspection",currentVisit?.svServiceInspection);
-  y=addTextBlock(doc,y,"Service Routing",currentVisit?.svRouting);
-  y=addTextBlock(doc,y,"Electrical Service Size",currentVisit?.svServiceSize);
-  y=addTextBlock(doc,y,"Main Panel Rating",currentVisit?.svBusRating);
-  y=addTextBlock(doc,y,"Main Breaker Rating",currentVisit?.svMainBreaker);
-  y=addTextBlock(doc,y,"Location of Utility Meter",currentVisit?.svMeterLoc);
-  y=addTextBlock(doc,y,"Location of Main Panel",currentVisit?.svPanelLoc);
-  y=addTextBlock(doc,y,"Distance Meter to Panel",currentVisit?.svDistance);
-  y=addTextBlock(doc,y,"Existing Generator",currentVisit?.svGenerator);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svEquipPics,"Electrical Equipment Pictures");
-  y=addTextBlock(doc,y,"Equipment Locations",currentVisit?.svEquipLocs);
-  y=addTextBlock(doc,y,"Inverter Location",currentVisit?.svInvLoc);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svInvLocPic,"Inverter Pictures");
-  y=addTextBlock(doc,y,"Battery Location",currentVisit?.svBattLoc);
-  y=addTextBlock(doc,y,"Transfer Switch/TEG/BUI Location",currentVisit?.svTransferLoc);
-  y=addTextBlock(doc,y,"Distance DC Cable Run",currentVisit?.svDCDistance);
-  y=addTextBlock(doc,y,"Distance AC Inv-Switch",currentVisit?.svACInvSwitch);
-  y=addTextBlock(doc,y,"Distance AC Switch-POC",currentVisit?.svACSwitchPOC);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svEquipLocPics,"Equipment Location Pictures");
-  y=addTextBlock(doc,y,"Connection Details",currentVisit?.svConnDetails);
-  y=addSection(doc,y,"Site Requirements");
-  y=addTextBlock(doc,y,"Is a DiR Required?",currentVisit?.svDiR);
-  y=addTextBlock(doc,y,"Would a Meter Pull Work?",currentVisit?.svMeterPull);
-  y=addTextBlock(doc,y,"Where is POC Being Made?",currentVisit?.svPOC);
-  y=addTextBlock(doc,y,"Is Trenching Required?",currentVisit?.svTrenching);
-  y=addTextBlock(doc,y,"Trench Distance",currentVisit?.svTrenchDistance);
-  y=addTextBlock(doc,y,"Is Equipment Rental Required?",currentVisit?.svEquipRental);
-  y=addRequiredEquipmentToPDF(doc,y);
-  y=addSection(doc,y,"Additional Details");
-  y=addTextBlock(doc,y,"Additional Comments",currentVisit?.svAddComments);
-  y=addTextBlock(doc,y,"Additional Cost Details",currentVisit?.svAddCosts);
-  y=addTextBlock(doc,y,"Additional Permitting",currentVisit?.svAddPermits);
-  y=addTextBlock(doc,y,"Additional Labour",currentVisit?.svAddLabour);
-  y=addTextBlock(doc,y,"Additional Breakers",currentVisit?.svAddBreakers);
-  y=addTextBlock(doc,y,"Additional Wire",currentVisit?.svAddWire);
-  y=addTextBlock(doc,y,"Additional Items",currentVisit?.svAddItems);
-  y=addSection(doc,y,"Wrap Up");
-  y=addTextBlock(doc,y,"Time Departed Site",currentVisit?.svDepartSite);
-  y=addTextBlock(doc,y,"Return Time",currentVisit?.svReturn);
-  const safeTitle=(currentVisit?.svSiteTitle||"Site_Visit").replace(/[\\\/:*?"<>|]/g,"_");
+
+  // --- Site Info ---
+  y = addSection(doc, y, "Site Info");
+  y = addTextBlock(doc, y, "Site Title", currentVisit?.svSiteTitle);
+  y = addTextBlock(doc, y, "Date", currentVisit?.svDate);
+  y = addTextBlock(doc, y, "Team Members", currentVisit?.svTeam);
+  y = addTextBlock(doc, y, "Time Departed Shop", currentVisit?.svDepart);
+  y = addTextBlock(doc, y, "Arrival Time at Site", currentVisit?.svArrival);
+  y = await addImagesGrid(doc, y, currentVisit?.svHomePic, "Home Pictures");
+
+  // --- Roof Assessment ---
+  y = addSection(doc, y, "Roof Assessment");
+  y = addTextBlock(doc, y, "Roof Assessed", currentVisit?.svRoofAssessed);
+  y = addTextBlock(doc, y, "Type of Roof", currentVisit?.svRoofType);
+  y = addTextBlock(doc, y, "Condition of Roof", currentVisit?.svRoofCondition);
+  y = addTextBlock(doc, y, "Drone Flight Completed", currentVisit?.svDrone);
+  y = addTextBlock(doc, y, "Attic Inspection", currentVisit?.svAttic);
+  y = addTextBlock(doc, y, "Top Chord Size", currentVisit?.svTopChord);
+  y = addTextBlock(doc, y, "Bottom Chord Size", currentVisit?.svBottomChord);
+  y = addTextBlock(doc, y, "Truss Spacing", currentVisit?.svTrussSpacing);
+  y = addTextBlock(doc, y, "Top Chord Span", currentVisit?.svTopSpan);
+  y = addTextBlock(doc, y, "Roof Access Issues", currentVisit?.svRoofIssues);
+  y = await addImagesGrid(doc, y, currentVisit?.svAtticPics, "Attic Pictures");
+
+  // --- Electrical Service ---
+  y = addSection(doc, y, "Electrical Service");
+  y = addTextBlock(doc, y, "Service Inspection", currentVisit?.svServiceInspection);
+  y = addTextBlock(doc, y, "Service Routing", currentVisit?.svRouting);
+  y = addTextBlock(doc, y, "Electrical Service Size", currentVisit?.svServiceSize);
+  y = addTextBlock(doc, y, "Main Panel Rating", currentVisit?.svBusRating);
+  y = addTextBlock(doc, y, "Main Breaker Rating", currentVisit?.svMainBreaker);
+  y = addTextBlock(doc, y, "Location of Utility Meter", currentVisit?.svMeterLoc);
+  y = addTextBlock(doc, y, "Location of Main Panel", currentVisit?.svPanelLoc);
+  y = addTextBlock(doc, y, "Distance Meter to Panel", currentVisit?.svDistance);
+  y = addTextBlock(doc, y, "Existing Generator", currentVisit?.svGenerator);
+  y = await addImagesGrid(doc, y, currentVisit?.svEquipPics, "Electrical Equipment Pictures");
+
+  y = addTextBlock(doc, y, "Equipment Locations", currentVisit?.svEquipLocs);
+  y = addTextBlock(doc, y, "Inverter Location", currentVisit?.svInvLoc);
+  y = await addImagesGrid(doc, y, currentVisit?.svInvLocPic, "Inverter Pictures");
+  y = addTextBlock(doc, y, "Battery Location", currentVisit?.svBattLoc);
+  y = addTextBlock(doc, y, "Transfer Switch/TEG/BUI Location", currentVisit?.svTransferLoc);
+  y = addTextBlock(doc, y, "Distance DC Cable Run", currentVisit?.svDCDistance);
+  y = addTextBlock(doc, y, "Distance AC Inv-Switch", currentVisit?.svACInvSwitch);
+  y = addTextBlock(doc, y, "Distance AC Switch-POC", currentVisit?.svACSwitchPOC);
+  y = await addImagesGrid(doc, y, currentVisit?.svEquipLocPics, "Equipment Location Pictures");
+
+  y = addTextBlock(doc, y, "Connection Details", currentVisit?.svConnDetails);
+
+  // --- Site Requirements ---
+  y = addSection(doc, y, "Site Requirements");
+  y = addTextBlock(doc, y, "Is a DiR Required?", currentVisit?.svDiR);
+  y = addTextBlock(doc, y, "Would a Meter Pull Work?", currentVisit?.svMeterPull);
+  y = addTextBlock(doc, y, "Where is POC Being Made?", currentVisit?.svPOC);
+  y = addTextBlock(doc, y, "Is Trenching Required?", currentVisit?.svTrenching);
+  y = addTextBlock(doc, y, "Trench Distance", currentVisit?.svTrenchDistance);
+  y = addTextBlock(doc, y, "Is Equipment Rental Required?", currentVisit?.svEquipRental);
+  y = addRequiredEquipmentToPDF(doc, y);
+
+  // --- Additional Details ---
+  y = addSection(doc, y, "Additional Details");
+  y = addTextBlock(doc, y, "Additional Comments", currentVisit?.svAddComments);
+  y = addTextBlock(doc, y, "Additional Cost Details", currentVisit?.svAddCosts);
+  y = addTextBlock(doc, y, "Additional Permitting", currentVisit?.svAddPermits);
+  y = addTextBlock(doc, y, "Additional Labour", currentVisit?.svAddLabour);
+  y = addTextBlock(doc, y, "Additional Breakers", currentVisit?.svAddBreakers);
+  y = addTextBlock(doc, y, "Additional Wire", currentVisit?.svAddWire);
+  y = addTextBlock(doc, y, "Additional Items", currentVisit?.svAddItems);
+
+  // --- Wrap Up ---
+  y = addSection(doc, y, "Wrap Up");
+  y = addTextBlock(doc, y, "Time Departed Site", currentVisit?.svDepartSite);
+  y = addTextBlock(doc, y, "Return Time", currentVisit?.svReturn);
+
+  const safeTitle = (currentVisit?.svSiteTitle || "Site_Visit").replace(/[\\\/:*?"<>|]/g, "_");
   doc.save(`${safeTitle}.pdf`);
 };
 
 renderVisits();
+
 document.addEventListener("input", e => {
-  if(!currentVisit) return;
+  if (!currentVisit) return;
   const el = e.target;
-  if(!el.id && !el.name) return;
-  if(el.type === "radio"){
+  if (!el.id && !el.name) return;
+  if (el.type === "radio") {
     currentVisit[el.name] = el.value;
-  } else if(el.type !== "file"){
+  } else if (el.type !== "file") {
     currentVisit[el.id] = el.value;
   }
   saveVisits();
 });
+
 </script>
 </body>
 </html>
+
