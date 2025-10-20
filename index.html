@@ -225,20 +225,32 @@ function backToList(){document.getElementById("jobListView").classList.remove("h
 document.getElementById("newVisitBtn").onclick=newVisit;
 document.getElementById("backListBtn").onclick=backToList;
 
-/* ---------------- FILE HANDLERS ---------------- */
-document.querySelectorAll('input[type="file"]').forEach(input=>{
-  const previewDiv=document.getElementById(input.id+"Preview");
-  input.addEventListener('change',async e=>{
-    clearPreview(previewDiv);
-    const files=Array.from(e.target.files||[]);
-    const ids=[];
-    for(const f of files){
-      const id=genId();await putBlob(id,f);ids.push(id);renderPreview(previewDiv,URL.createObjectURL(f), id, input.id);
+
+/* ---------------- FILE HANDLERS (APPEND MODE) ---------------- */
+document.querySelectorAll('input[type="file"]').forEach(input => {
+  const previewDiv = document.getElementById(input.id + "Preview");
+
+  input.addEventListener('change', async e => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    if (!currentVisit) currentVisit = {};
+    if (!currentVisit[input.id]) currentVisit[input.id] = [];
+
+    // Keep old image previews, just append new ones
+    for (const f of files) {
+      const id = genId();
+      await putBlob(id, f);
+      currentVisit[input.id].push(id);
+      renderPreview(previewDiv, URL.createObjectURL(f), id, input.id);
     }
-    if(!currentVisit)currentVisit={};
-    currentVisit[input.id]=ids;saveVisits();
+
+    saveVisits();
+    // Clear input so the same file can be uploaded again if needed
+    input.value = "";
   });
 });
+
 
 /* ---------------- SAVE VISIT ---------------- */
 document.getElementById("saveVisitBtn").onclick=()=>{
@@ -1036,5 +1048,6 @@ document.addEventListener("input", e => {
 </script>
 </body>
 </html>
+
 
 
