@@ -855,7 +855,36 @@ function blobToDataURL(blob) {
   });
 }
 
-// Optimized grid-based image function
+/* --- Image compression helper --- */
+async function compressImageForPDF(blob, maxWidth = 1280, maxHeight = 1280, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      let { width, height } = img;
+      const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+      width *= scale;
+      height *= scale;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (compressedBlob) => {
+          URL.revokeObjectURL(url);
+          resolve(compressedBlob);
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+    img.src = url;
+  });
+}
+
+/* --- Optimized grid-based image function with compression --- */
 async function addImagesGrid(doc, y, refs, label) {
   if (!refs?.length) return y;
 
@@ -864,23 +893,32 @@ async function addImagesGrid(doc, y, refs, label) {
   doc.text(label, 12, y);
   y += 8;
 
-  const pageWidth = 186;  // usable width
-  const perRow = 4;       // number of images per row
-  const gap = 4;          // space between images
+  const pageWidth = 186;   // usable width
+  const perRow = 4;        // number of images per row
+  const gap = 4;           // spacing between images
   const imgW = (pageWidth - (perRow - 1) * gap) / perRow;
-  const imgH = 32;        // fixed height for consistency
+  const imgH = 32;         // fixed height for consistent rows
 
   let x = 12;
   let rowCount = 0;
 
   for (const id of refs) {
-    const blob = await getBlob(id);
+    let blob = await getBlob(id);
     if (!blob) continue;
+
+    // 🔧 Compress oversized images
+    if (blob.size > 1500000) {
+      try {
+        blob = await compressImageForPDF(blob);
+      } catch (err) {
+        console.warn("Image compression failed, using original:", err);
+      }
+    }
 
     const dataUrl = await blobToDataURL(blob);
     const type = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 
-    // page break check
+    // check for page break
     if (y + imgH > 270) {
       doc.addPage();
       y = 20;
@@ -900,6 +938,7 @@ async function addImagesGrid(doc, y, refs, label) {
   if (rowCount > 0) y += imgH + gap;
   return y;
 }
+
 
 
 function addTextBlock(doc, y, label, val) {
@@ -1048,6 +1087,7 @@ document.addEventListener("input", e => {
 </script>
 </body>
 </html>
+
 
 
 
