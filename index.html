@@ -855,8 +855,23 @@ function blobToDataURL(blob) {
   });
 }
 
-/* --- Image compression helper --- */
-async function compressImageForPDF(blob, maxWidth = 1280, maxHeight = 1280, quality = 0.85) {
+/* --- Adaptive Image Compression Helper --- */
+async function compressImageForPDF(blob, totalImages = 1) {
+  // Dynamically adjust based on image count
+  let maxWidth, maxHeight, quality;
+
+  if (totalImages <= 10) {
+    maxWidth = 1600; maxHeight = 1600; quality = 0.9;
+  } else if (totalImages <= 25) {
+    maxWidth = 1280; maxHeight = 1280; quality = 0.85;
+  } else if (totalImages <= 40) {
+    maxWidth = 1024; maxHeight = 1024; quality = 0.8;
+  } else if (totalImages <= 60) {
+    maxWidth = 900;  maxHeight = 900;  quality = 0.75;
+  } else {
+    maxWidth = 720;  maxHeight = 720;  quality = 0.7;
+  }
+
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
@@ -871,6 +886,7 @@ async function compressImageForPDF(blob, maxWidth = 1280, maxHeight = 1280, qual
       canvas.height = height;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0, width, height);
+
       canvas.toBlob(
         (compressedBlob) => {
           URL.revokeObjectURL(url);
@@ -884,32 +900,38 @@ async function compressImageForPDF(blob, maxWidth = 1280, maxHeight = 1280, qual
   });
 }
 
-/* --- Optimized grid-based image function with compression --- */
+/* --- Optimized grid-based image function with adaptive compression --- */
 async function addImagesGrid(doc, y, refs, label) {
   if (!refs?.length) return y;
 
+  const totalImages = refs.length;
   doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
   doc.text(label, 12, y);
   y += 8;
 
   const pageWidth = 186;   // usable width
-  const perRow = 4;        // number of images per row
+  const perRow = 4;        // images per row
   const gap = 4;           // spacing between images
   const imgW = (pageWidth - (perRow - 1) * gap) / perRow;
-  const imgH = 32;         // fixed height for consistent rows
+  const imgH = 32;         // fixed height
 
   let x = 12;
   let rowCount = 0;
+  let index = 0;
 
   for (const id of refs) {
+    index++;
     let blob = await getBlob(id);
     if (!blob) continue;
 
-    // 🔧 Compress oversized images
-    if (blob.size > 1500000) {
+    // Progress feedback (console-based)
+    console.log(`Compressing image ${index}/${totalImages}...`);
+
+    // Compress if file is large or total set is big
+    if (blob.size > 1000000 || totalImages > 10) {
       try {
-        blob = await compressImageForPDF(blob);
+        blob = await compressImageForPDF(blob, totalImages);
       } catch (err) {
         console.warn("Image compression failed, using original:", err);
       }
@@ -918,7 +940,7 @@ async function addImagesGrid(doc, y, refs, label) {
     const dataUrl = await blobToDataURL(blob);
     const type = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 
-    // check for page break
+    // Handle page breaks
     if (y + imgH > 270) {
       doc.addPage();
       y = 20;
@@ -936,8 +958,11 @@ async function addImagesGrid(doc, y, refs, label) {
   }
 
   if (rowCount > 0) y += imgH + gap;
+  console.log(`Finished compressing and adding ${totalImages} images.`);
   return y;
 }
+
+
 
 
 
@@ -1087,6 +1112,7 @@ document.addEventListener("input", e => {
 </script>
 </body>
 </html>
+
 
 
 
