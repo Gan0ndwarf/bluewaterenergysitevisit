@@ -847,6 +847,10 @@ function removePart(i){if(!confirm("Remove this part?"))return;currentVisit.requ
 
 
 /* ---------------- PDF EXPORT ---------------- */
+<!-- 🔧 FAST PDF EXPORT SECTION -->
+
+/* ===== FAST HELPERS ===== */
+
 function blobToDataURL(blob) {
   return new Promise(res => {
     const fr = new FileReader();
@@ -855,112 +859,141 @@ function blobToDataURL(blob) {
   });
 }
 
-/* --- Adaptive Image Compression Helper --- */
-async function compressImageForPDF(blob, totalImages = 1) {
-  // Dynamically adjust based on image count
-  let maxWidth, maxHeight, quality;
-
-  if (totalImages <= 10) {
-    maxWidth = 1600; maxHeight = 1600; quality = 0.9;
-  } else if (totalImages <= 25) {
-    maxWidth = 1280; maxHeight = 1280; quality = 0.85;
-  } else if (totalImages <= 40) {
-    maxWidth = 1024; maxHeight = 1024; quality = 0.8;
-  } else if (totalImages <= 60) {
-    maxWidth = 900;  maxHeight = 900;  quality = 0.75;
-  } else {
-    maxWidth = 720;  maxHeight = 720;  quality = 0.7;
-  }
-
-  return new Promise((resolve) => {
+// Compress image to ~1500px max dimension for faster export + small files
+async function compressImage(blob, maxSize = 1500, quality = 0.75) {
+  return new Promise(resolve => {
     const img = new Image();
-    const url = URL.createObjectURL(blob);
     img.onload = () => {
       let { width, height } = img;
-      const scale = Math.min(maxWidth / width, maxHeight / height, 1);
-      width *= scale;
-      height *= scale;
+
+      const scale = Math.min(maxSize / width, maxSize / height, 1);
+      const newW = width * scale;
+      const newH = height * scale;
 
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = newW;
+      canvas.height = newH;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, newW, newH);
 
       canvas.toBlob(
-        (compressedBlob) => {
-          URL.revokeObjectURL(url);
-          resolve(compressedBlob);
-        },
+        b => resolve(b),
         "image/jpeg",
         quality
       );
     };
-    img.src = url;
+    img.src = URL.createObjectURL(blob);
   });
 }
 
-/* --- Optimized grid-based image function with adaptive compression --- */
-async function addImagesGrid(doc, y, refs, label) {
-  if (!refs?.length) return y;
+/* ===== LOAD ALL IMAGES ONCE (Huge speed boost) ===== */
+async function loadAllImages(refs = []) {
+  const results = {};
 
-  const totalImages = refs.length;
+  for (const id of refs) {
+    const blob = await getBlob(id);
+    if (!blob) continue;
+
+    // compress before export
+    const compressed = await compressImage(blob);
+
+    // convert to data URL once
+    const url = await blobToDataURL(compressed);
+
+    results[id] = {
+      dataUrl: url,
+      width: null,
+      height: null
+    };
+
+    // get dimensions fast
+    await new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        results[id].width = img.width;
+        results[id].height = img.height;
+        res();
+      };
+      img.src = url;
+    });
+  }
+
+  return results;
+}
+
+/* ===== SUPER FAST IMAGE SECTION ===== */
+async function addImagesFullWidth_FAST(doc, y, refs, label, cache) {
+  if (!refs || !refs.length) return y;
+
   doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
   doc.text(label, 12, y);
   y += 8;
 
-  const pageWidth = 186;   // usable width
-  const perRow = 4;        // images per row
-  const gap = 4;           // spacing between images
-  const imgW = (pageWidth - (perRow - 1) * gap) / perRow;
-  const imgH = 32;         // fixed height
-
-  let x = 12;
-  let rowCount = 0;
-  let index = 0;
+  const maxW = 186;
 
   for (const id of refs) {
-    index++;
-    let blob = await getBlob(id);
-    if (!blob) continue;
+    const entry = cache[id];
+    if (!entry) continue;
 
-    // Progress feedback (console-based)
-    console.log(`Compressing image ${index}/${totalImages}...`);
+    let w = maxW;
+    let h = (entry.height / entry.width) * w;
 
-    // Compress if file is large or total set is big
-    if (blob.size > 1000000 || totalImages > 10) {
-      try {
-        blob = await compressImageForPDF(blob, totalImages);
-      } catch (err) {
-        console.warn("Image compression failed, using original:", err);
-      }
-    }
-
-    const dataUrl = await blobToDataURL(blob);
-    const type = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-
-    // Handle page breaks
-    if (y + imgH > 270) {
+    if (y + h > 280) {
       doc.addPage();
       y = 20;
     }
 
-    doc.addImage(dataUrl, type, x, y, imgW, imgH);
-    x += imgW + gap;
-    rowCount++;
-
-    if (rowCount >= perRow) {
-      x = 12;
-      y += imgH + gap;
-      rowCount = 0;
-    }
+    doc.addImage(entry.dataUrl, "JPEG", 12, y, w, h);
+    y += h + 8;
   }
-
-  if (rowCount > 0) y += imgH + gap;
-  console.log(`Finished compressing and adding ${totalImages} images.`);
   return y;
 }
+
+/* ===== PDF EXPORT BUTTON ===== */
+document.getElementById("exportPDFBtn").onclick = async () => {
+  const ok = await validateRequiredFields();
+  if (!ok) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  /* Load ALL images for the entire project in one go */
+  const allImageFields = [
+    "svHomePic", "svAtticPics", "svEquipPics",
+    "svInvLocPic", "svEquipLocPics"
+  ];
+
+  const allRefs = allImageFields.flatMap(f => currentVisit?.[f] || []);
+  const imageCache = await loadAllImages(allRefs);
+
+  /* ====== NOW BUILD PDF ====== */
+
+  y = addSection(doc, y, "Site Info");
+  y = addTextBlock(doc, y, "Site Title", currentVisit.svSiteTitle);
+  y = addTextBlock(doc, y, "Date", currentVisit.svDate);
+  y = addTextBlock(doc, y, "Team Members", currentVisit.svTeam);
+
+  y = await addImagesFullWidth_FAST(doc, y, currentVisit.svHomePic, "Home Pictures", imageCache);
+
+  y = addSection(doc, y, "Roof Assessment");
+  y = addTextBlock(doc, y, "Roof Assessed", currentVisit.svRoofAssessed);
+  y = addTextBlock(doc, y, "Type of Roof", currentVisit.svRoofType);
+  y = addTextBlock(doc, y, "Roof Condition", currentVisit.svRoofCondition);
+  y = addTextBlock(doc, y, "Drone Flight", currentVisit.svDrone);
+
+  y = await addImagesFullWidth_FAST(doc, y, currentVisit.svAtticPics, "Attic Pictures", imageCache);
+
+  y = addSection(doc, y, "Electrical Equipment");
+  y = await addImagesFullWidth_FAST(doc, y, currentVisit.svEquipPics, "Electrical Equipment Pictures", imageCache);
+
+  y = await addImagesFullWidth_FAST(doc, y, currentVisit.svInvLocPic, "Inverter Pictures", imageCache);
+
+  y = await addImagesFullWidth_FAST(doc, y, currentVisit.svEquipLocPics, "Equipment Location Pictures", imageCache);
+
+  const name = (currentVisit.svSiteTitle || "Site Visit").replace(/[\\\/:*?"<>|]/g, "_");
+  doc.save(name + ".pdf");
+};
 
 
 
@@ -1112,6 +1145,7 @@ document.addEventListener("input", e => {
 </script>
 </body>
 </html>
+
 
 
 
