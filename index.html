@@ -833,128 +833,303 @@ function updatePartQty(i,val){currentVisit.requiredParts[i].qty=val;saveVisits()
 function removePart(i){if(!confirm("Remove this part?"))return;currentVisit.requiredParts.splice(i,1);saveVisits();renderParts();}
 
 
-/* ---------------- PDF EXPORT ---------------- */
-function blobToDataURL(blob){return new Promise(res=>{const fr=new FileReader();fr.onload=e=>res(e.target.result);fr.readAsDataURL(blob);});}
-async function addImagesFullWidth(doc,y,refs,label){
-  if(!refs||!refs.length)return y;
-  doc.setFontSize(12);doc.setTextColor(0,0,0);
-  doc.text(label,12,y);y+=8;
-  const maxW=186;
-  for(const id of refs){
-    const blob=await getBlob(id);if(!blob)continue;
-    const dataUrl=await blobToDataURL(blob);
-    const props=doc.getImageProperties(dataUrl);
-    const w=Math.min(maxW,props.width?maxW:maxW);
-    const h=(props.height/props.width)*w;
-    if(y+h>280){doc.addPage();y=20;}
-    doc.addImage(dataUrl,'JPEG',12,y,w,h);
-    y+=h+8;
+/* ---------------- PDF EXPORT (FAST + 3-column GRID) ---------------- */
+
+/* utility: blob -> dataURL */
+function blobToDataURL(blob){
+  return new Promise(res=>{
+    const fr=new FileReader();
+    fr.onload=e=>res(e.target.result);
+    fr.readAsDataURL(blob);
+  });
+}
+
+/* compress image via canvas -> JPEG blob */
+async function compressImageBlob(blob, maxEdge = 1280, quality = 0.75){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const origW = img.naturalWidth || img.width;
+      const origH = img.naturalHeight || img.height;
+      const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+      const w = Math.round(origW * scale);
+      const h = Math.round(origH * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => resolve(b), 'image/jpeg', quality);
+    };
+    img.onerror = (e)=>{
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
+/* throttle helper: process items in batches to avoid CPU spike */
+async function mapWithConcurrency(items, worker, concurrency = 4){
+  const results = new Array(items.length);
+  let idx = 0;
+  async function runner() {
+    while(true){
+      const i = idx++;
+      if(i >= items.length) return;
+      try {
+        results[i] = await worker(items[i], i);
+      } catch(e) {
+        results[i] = null;
+      }
+    }
   }
-  return y;
+  const runners = [];
+  for(let i=0;i<concurrency;i++) runners.push(runner());
+  await Promise.all(runners);
+  return results;
 }
-function addTextBlock(doc,y,label,val){
-  if(val===undefined||val===null||String(val).trim()==="")return y;
-  doc.setFontSize(12);doc.setTextColor(0,0,0);
-  const lines=doc.splitTextToSize(`${label}: ${val}`,186);
-  for(const line of lines){if(y>280){doc.addPage();y=20;}doc.text(line,12,y);y+=6;}
-  y+=2;return y;
+
+/*
+  Preload + compress + dataURL all images used in an export.
+  refsArray: array of ids (may contain duplicates)
+  returns: cache { id: { dataUrl, width, height, size } }
+*/
+async function buildImageCacheForExport(refsArray){
+  const ids = Array.from(new Set((refsArray||[]).filter(Boolean)));
+  if(!ids.length) return {};
+  // load blobs from DB in parallel
+  const blobPromises = ids.map(id => getBlob(id).then(blob => ({ id, blob })).catch(()=>({ id, blob: null })));
+  const blobResults = await Promise.all(blobPromises);
+
+  // compress & convert to data URLs with limited concurrency
+  const toProcess = blobResults.filter(r => r.blob).map(r => ({ id: r.id, blob: r.blob }));
+
+  const processed = await mapWithConcurrency(toProcess, async item => {
+    try {
+      // compress
+      const compressed = await compressImageBlob(item.blob, 1280, 0.75);
+      // dataURL
+      const dataUrl = await blobToDataURL(compressed);
+      // get dimensions
+      const dims = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight });
+        i.onerror = rej;
+        i.src = dataUrl;
+      });
+      return { id: item.id, dataUrl, width: dims.w, height: dims.h, size: compressed.size };
+    } catch (e) {
+      console.warn('image processing failed for', item.id, e);
+      return { id: item.id, dataUrl: null };
+    }
+  }, 3); // 3 at a time
+
+  const cache = {};
+  for(const p of processed) if(p && p.dataUrl) cache[p.id] = { dataUrl: p.dataUrl, width: p.width, height: p.height, size: p.size };
+  return cache;
 }
-function addSection(doc,y,title){
-  doc.setFontSize(14);doc.setTextColor(11,105,255);
-  if(y>270){doc.addPage();y=20;}
-  doc.text(title,12,y);y+=7;
-  doc.setDrawColor(11,105,255);doc.setLineWidth(0.5);doc.line(12,y,198,y);
-  y+=8;doc.setFontSize(12);doc.setTextColor(0,0,0);
-  return y;
+
+/*
+  addImagesGrid_FAST:
+  - 3 columns
+  - each column width ~= 58 mm on standard page (computed from page width)
+  - preserves aspect ratio
+  - auto-wrap rows and pages
+*/
+async function addImagesGrid_FAST(doc, y, refs, label, imageCache){
+  if(!refs || !refs.length) return y;
+  doc.setFontSize(12); doc.setTextColor(0,0,0);
+  doc.text(label, 12, y);
+  y += 8;
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const cols = 3;
+  const gap = 6;
+  const usableW = pageW - margin*2;
+  const cellW = (usableW - (gap * (cols - 1))) / cols; // mm in PDF units
+  // cellW will be ~58 for A4/Letter with these margins
+  let x = margin;
+  let rowY = y;
+  let currentRowMaxH = 0;
+  let colIndex = 0;
+
+  for(const id of refs){
+    const entry = imageCache && imageCache[id];
+    if(!entry || !entry.dataUrl) {
+      // skip missing image
+      colIndex++;
+      if(colIndex >= cols){
+        colIndex = 0;
+        x = margin;
+        rowY += currentRowMaxH + gap;
+        currentRowMaxH = 0;
+      } else {
+        x += cellW + gap;
+      }
+      continue;
+    }
+
+    // compute height maintaining aspect ratio
+    const ar = entry.width && entry.height ? (entry.height / entry.width) : 0.75;
+    const drawW = cellW;
+    const drawH = drawW * ar;
+
+    // if this image won't fit on the current page, start a new page
+    if(rowY + drawH > pageH - 20){
+      doc.addPage();
+      rowY = 20;
+      x = margin;
+      currentRowMaxH = 0;
+      colIndex = 0;
+    }
+
+    // draw
+    try {
+      doc.addImage(entry.dataUrl, 'JPEG', x, rowY, drawW, drawH);
+    } catch(e){
+      console.warn('jsPDF addImage failed for', id, e);
+    }
+
+    // update row metrics
+    if(drawH > currentRowMaxH) currentRowMaxH = drawH;
+    colIndex++;
+    if(colIndex >= cols){
+      // next row
+      x = margin;
+      rowY += currentRowMaxH + gap;
+      currentRowMaxH = 0;
+      colIndex = 0;
+    } else {
+      x += cellW + gap;
+    }
+  }
+
+  // after placing all images, return Y at the end of last row
+  // if we ended mid-row, increase rowY by currentRowMaxH
+  if(colIndex !== 0){
+    rowY += currentRowMaxH + 8;
+  } else {
+    rowY += 8;
+  }
+  return rowY;
 }
-function addRequiredEquipmentToPDF(doc,y){
-  y=addSection(doc,y,"Required Equipment");
+
+/* ===== Export Button Handler (uses the new grid) ===== */
+document.getElementById("exportPDFBtn").onclick = async () => {
+  const ok = await validateRequiredFields();
+  if (!ok) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  // list out all image fields present in your form that need preloading
+  const imageFields = [
+    "svHomePic", "svAtticPics", "svEquipPics",
+    "svInvLocPic", "svEquipLocPics"
+  ];
+
+  // collect all refs into a single array (preserve duplicates if desired)
+  let allRefs = [];
+  for(const f of imageFields){
+    const arr = currentVisit?.[f] || [];
+    if(Array.isArray(arr)) allRefs = allRefs.concat(arr);
+  }
+
+  // build a cache of processed dataUrls & dims
+  const imageCache = await buildImageCacheForExport(allRefs);
+
+  // Build PDF body using your existing helpers (addSection, addTextBlock)
+  y = addSection(doc, y, "Site Info");
+  y = await addTextBlock(doc, y, "Site Title", currentVisit?.svSiteTitle);
+  y = await addTextBlock(doc, y, "Date", currentVisit?.svDate);
+  y = await addTextBlock(doc, y, "Team Members", currentVisit?.svTeam);
+  y = await addTextBlock(doc, y, "Time Departed Shop", currentVisit?.svDepart);
+  y = await addTextBlock(doc, y, "Arrival Time at Site", currentVisit?.svArrival);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svHomePic || [], "Home Pictures", imageCache);
+
+  y = addSection(doc, y, "Roof Assessment");
+  y = await addTextBlock(doc, y, "Roof Assessed", currentVisit?.svRoofAssessed);
+  y = await addTextBlock(doc, y, "Type of Roof", currentVisit?.svRoofType);
+  y = await addTextBlock(doc, y, "Condition of Roof", currentVisit?.svRoofCondition);
+  y = await addTextBlock(doc, y, "Drone Flight Completed", currentVisit?.svDrone);
+  y = await addTextBlock(doc, y, "Attic Inspection", currentVisit?.svAttic);
+  y = await addTextBlock(doc, y, "Top Chord Size", currentVisit?.svTopChord);
+  y = await addTextBlock(doc, y, "Bottom Chord Size", currentVisit?.svBottomChord);
+  y = await addTextBlock(doc, y, "Truss Spacing", currentVisit?.svTrussSpacing);
+  y = await addTextBlock(doc, y, "Top Chord Span", currentVisit?.svTopSpan);
+  y = await addTextBlock(doc, y, "Roof Access Issues", currentVisit?.svRoofIssues);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svAtticPics || [], "Attic Pictures", imageCache);
+
+  y = addSection(doc, y, "Electrical Service");
+  y = await addTextBlock(doc, y, "Service Inspection", currentVisit?.svServiceInspection);
+  y = await addTextBlock(doc, y, "Service Routing", currentVisit?.svRouting);
+  y = await addTextBlock(doc, y, "Electrical Service Size", currentVisit?.svServiceSize);
+  y = await addTextBlock(doc, y, "Main Panel Rating", currentVisit?.svBusRating);
+  y = await addTextBlock(doc, y, "Main Breaker Rating", currentVisit?.svMainBreaker);
+  y = await addTextBlock(doc, y, "Location of Utility Meter", currentVisit?.svMeterLoc);
+  y = await addTextBlock(doc, y, "Location of Main Panel", currentVisit?.svPanelLoc);
+  y = await addTextBlock(doc, y, "Distance Meter to Panel", currentVisit?.svDistance);
+  y = await addTextBlock(doc, y, "Existing Generator", currentVisit?.svGenerator);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svEquipPics || [], "Electrical Equipment Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Equipment Locations", currentVisit?.svEquipLocs);
+  y = await addTextBlock(doc, y, "Inverter Location", currentVisit?.svInvLoc);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svInvLocPic || [], "Inverter Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Battery Location", currentVisit?.svBattLoc);
+  y = await addTextBlock(doc, y, "Transfer Switch/TEG/BUI Location", currentVisit?.svTransferLoc);
+  y = await addTextBlock(doc, y, "Distance DC Cable Run", currentVisit?.svDCDistance);
+  y = await addTextBlock(doc, y, "Distance AC Inv-Switch", currentVisit?.svACInvSwitch);
+  y = await addTextBlock(doc, y, "Distance AC Switch-POC", currentVisit?.svACSwitchPOC);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svEquipLocPics || [], "Equipment Location Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Connection Details", currentVisit?.svConnDetails);
+
+  y = addSection(doc, y, "Site Requirements");
+  y = await addTextBlock(doc, y, "Is a DiR Required?", currentVisit?.svDiR);
+  y = await addTextBlock(doc, y, "Would a Meter Pull Work?", currentVisit?.svMeterPull);
+  y = await addTextBlock(doc, y, "Where is POC Being Made?", currentVisit?.svPOC);
+  y = await addTextBlock(doc, y, "Is Trenching Required?", currentVisit?.svTrenching);
+  y = await addTextBlock(doc, y, "Trench Distance", currentVisit?.svTrenchDistance);
+  y = await addTextBlock(doc, y, "Is Equipment Rental Required?", currentVisit?.svEquipRental);
+
+  // required parts
+  y = addSection(doc, y, "Required Equipment");
   if(currentVisit?.requiredParts?.length){
-    currentVisit.requiredParts.forEach(p=>{
-      y=addTextBlock(doc,y,p.part,"Qty: "+p.qty);
-    });
-  }else{y=addTextBlock(doc,y,"No Equipment Listed","");}
-  return y;
-}
-document.getElementById("exportPDFBtn").onclick=async()=>{
-  const {jsPDF}=window.jspdf;const doc=new jsPDF();let y=20;
-   const ok = await validateRequiredFields();
-  if (!ok) return; // STOP export if missing required fields
-  y=addSection(doc,y,"Site Info");
-  y=addTextBlock(doc,y,"Site Title",currentVisit?.svSiteTitle);
-  y=addTextBlock(doc,y,"Date",currentVisit?.svDate);
-  y=addTextBlock(doc,y,"Team Members",currentVisit?.svTeam);
-  y=addTextBlock(doc,y,"Time Departed Shop",currentVisit?.svDepart);
-  y=addTextBlock(doc,y,"Arrival Time at Site",currentVisit?.svArrival);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svHomePic,"Home Pictures");
-  y=addSection(doc,y,"Roof Assessment");
-  y=addTextBlock(doc,y,"Roof Assessed",currentVisit?.svRoofAssessed);
-  y=addTextBlock(doc,y,"Type of Roof",currentVisit?.svRoofType);
-  y=addTextBlock(doc,y,"Condition of Roof",currentVisit?.svRoofCondition);
-  y=addTextBlock(doc,y,"Drone Flight Completed",currentVisit?.svDrone);
-  y=addTextBlock(doc,y,"Attic Inspection",currentVisit?.svAttic);
-  y=addTextBlock(doc,y,"Top Chord Size",currentVisit?.svTopChord);
-  y=addTextBlock(doc,y,"Bottom Chord Size",currentVisit?.svBottomChord);
-  y=addTextBlock(doc,y,"Truss Spacing",currentVisit?.svTrussSpacing);
-  y=addTextBlock(doc,y,"Top Chord Span",currentVisit?.svTopSpan);
-  y=addTextBlock(doc,y,"Roof Access Issues",currentVisit?.svRoofIssues);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svAtticPics,"Attic Pictures");
-  y=addSection(doc,y,"Electrical Service");
-  y=addTextBlock(doc,y,"Service Inspection",currentVisit?.svServiceInspection);
-  y=addTextBlock(doc,y,"Service Routing",currentVisit?.svRouting);
-  y=addTextBlock(doc,y,"Electrical Service Size",currentVisit?.svServiceSize);
-  y=addTextBlock(doc,y,"Main Panel Rating",currentVisit?.svBusRating);
-  y=addTextBlock(doc,y,"Main Breaker Rating",currentVisit?.svMainBreaker);
-  y=addTextBlock(doc,y,"Location of Utility Meter",currentVisit?.svMeterLoc);
-  y=addTextBlock(doc,y,"Location of Main Panel",currentVisit?.svPanelLoc);
-  y=addTextBlock(doc,y,"Distance Meter to Panel",currentVisit?.svDistance);
-  y=addTextBlock(doc,y,"Existing Generator",currentVisit?.svGenerator);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svEquipPics,"Electrical Equipment Pictures");
-  y=addTextBlock(doc,y,"Equipment Locations",currentVisit?.svEquipLocs);
-  y=addTextBlock(doc,y,"Inverter Location",currentVisit?.svInvLoc);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svInvLocPic,"Inverter Pictures");
-  y=addTextBlock(doc,y,"Battery Location",currentVisit?.svBattLoc);
-  y=addTextBlock(doc,y,"Transfer Switch/TEG/BUI Location",currentVisit?.svTransferLoc);
-  y=addTextBlock(doc,y,"Distance DC Cable Run",currentVisit?.svDCDistance);
-  y=addTextBlock(doc,y,"Distance AC Inv-Switch",currentVisit?.svACInvSwitch);
-  y=addTextBlock(doc,y,"Distance AC Switch-POC",currentVisit?.svACSwitchPOC);
-  y=await addImagesFullWidth(doc,y,currentVisit?.svEquipLocPics,"Equipment Location Pictures");
-  y=addTextBlock(doc,y,"Connection Details",currentVisit?.svConnDetails);
-  y=addSection(doc,y,"Site Requirements");
-  y=addTextBlock(doc,y,"Is a DiR Required?",currentVisit?.svDiR);
-  y=addTextBlock(doc,y,"Would a Meter Pull Work?",currentVisit?.svMeterPull);
-  y=addTextBlock(doc,y,"Where is POC Being Made?",currentVisit?.svPOC);
-  y=addTextBlock(doc,y,"Is Trenching Required?",currentVisit?.svTrenching);
-  y=addTextBlock(doc,y,"Trench Distance",currentVisit?.svTrenchDistance);
-  y=addTextBlock(doc,y,"Is Equipment Rental Required?",currentVisit?.svEquipRental);
-  y=addRequiredEquipmentToPDF(doc,y);
-  y=addSection(doc,y,"Additional Details");
-  y=addTextBlock(doc,y,"Additional Comments",currentVisit?.svAddComments);
-  y=addTextBlock(doc,y,"Additional Cost Details",currentVisit?.svAddCosts);
-  y=addTextBlock(doc,y,"Additional Permitting",currentVisit?.svAddPermits);
-  y=addTextBlock(doc,y,"Additional Labour",currentVisit?.svAddLabour);
-  y=addTextBlock(doc,y,"Additional Breakers",currentVisit?.svAddBreakers);
-  y=addTextBlock(doc,y,"Additional Wire",currentVisit?.svAddWire);
-  y=addTextBlock(doc,y,"Additional Items",currentVisit?.svAddItems);
-  y=addSection(doc,y,"Wrap Up");
-  y=addTextBlock(doc,y,"Time Departed Site",currentVisit?.svDepartSite);
-  y=addTextBlock(doc,y,"Return Time",currentVisit?.svReturn);
-  const safeTitle=(currentVisit?.svSiteTitle||"Site_Visit").replace(/[\\\/:*?"<>|]/g,"_");
+    currentVisit.requiredParts.forEach(p => { y = addTextBlock(doc, y, p.part, "Qty: " + p.qty); });
+  } else {
+    y = addTextBlock(doc, y, "No Equipment Listed", "");
+  }
+
+  y = addSection(doc, y, "Additional Details");
+  y = await addTextBlock(doc, y, "Additional Comments", currentVisit?.svAddComments);
+  y = await addTextBlock(doc, y, "Additional Cost Details", currentVisit?.svAddCosts);
+  y = await addTextBlock(doc, y, "Additional Permitting", currentVisit?.svAddPermits);
+  y = await addTextBlock(doc, y, "Additional Labour", currentVisit?.svAddLabour);
+  y = await addTextBlock(doc, y, "Additional Breakers", currentVisit?.svAddBreakers);
+  y = await addTextBlock(doc, y, "Additional Wire", currentVisit?.svAddWire);
+  y = await addTextBlock(doc, y, "Additional Items", currentVisit?.svAddItems);
+
+  y = addSection(doc, y, "Wrap Up");
+  y = await addTextBlock(doc, y, "Time Departed Site", currentVisit?.svDepartSite);
+  y = await addTextBlock(doc, y, "Return Time", currentVisit?.svReturn);
+
+  const safeTitle = (currentVisit?.svSiteTitle || "Site_Visit").replace(/[\\\/:*?"<>|]/g, "_");
   doc.save(`${safeTitle}.pdf`);
 };
 
-renderVisits();
-document.addEventListener("input", e => {
-  if(!currentVisit) return;
-  const el = e.target;
-  if(!el.id && !el.name) return;
-  if(el.type === "radio"){
-    currentVisit[el.name] = el.value;
-  } else if(el.type !== "file"){
-    currentVisit[el.id] = el.value;
-  }
-  saveVisits();
-});
 </script>
 </body>
 </html>
+
