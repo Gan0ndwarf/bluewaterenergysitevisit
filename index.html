@@ -1124,8 +1124,22 @@ document.getElementById("exportPDFBtn").onclick = async () => {
   y = addTextBlock(doc, y, "Time Departed Site", currentVisit?.svDepartSite);
   y = addTextBlock(doc, y, "Return Time", currentVisit?.svReturn);
 
-  const safeTitle = (currentVisit?.svSiteTitle || "Site_Visit").replace(/[\\\/:*?"<>|]/g, "_");
-  doc.save(`${safeTitle}.pdf`);
+// Format date as YYYY-MM-DD
+const dateStr = (currentJob.date || new Date().toISOString().split('T')[0])
+  .replace(/\//g, '-')
+  .replace(/\s+/g, '-');
+
+// Clean project name for safe filename
+const safeTitle = (currentJob.title || "Untitled")
+  .trim()
+  .replace(/[^a-z0-9_\-]+/gi, '_');
+
+// Combine both
+const fileName = `${dateStr}_${safeTitle}.pdf`;
+
+// Save with new format
+doc.save(fileName);
+ 
 };
 
 renderVisits();
@@ -1145,6 +1159,7 @@ document.addEventListener("input", e => {
 </script>
 </body>
 </html>
+
 
 
 
