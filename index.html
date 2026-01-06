@@ -1130,7 +1130,7 @@ const ok = await validateRequiredFields();
   doc.save(`${safeTitle}.pdf`);
       } catch (err) {
     console.error("PDF Export failed:", err);
-    alert("PDF export failed — check console for details.");
+    alert("PDF export failed — check console for details."+ err);
   }
 };
   
@@ -1139,5 +1139,6 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
