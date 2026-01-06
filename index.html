@@ -931,6 +931,21 @@ async function buildImageCacheForExport(refsArray){
   for(const p of processed) if(p && p.dataUrl) cache[p.id] = { dataUrl: p.dataUrl, width: p.width, height: p.height, size: p.size };
   return cache;
 }
+  function addTextBlock(doc,y,label,val){
+  if(val===undefined||val===null||String(val).trim()==="")return y;
+  doc.setFontSize(12);doc.setTextColor(0,0,0);
+  const lines=doc.splitTextToSize(`${label}: ${val}`,186);
+  for(const line of lines){if(y>280){doc.addPage();y=20;}doc.text(line,12,y);y+=6;}
+  y+=2;return y;
+}
+function addSection(doc,y,title){
+  doc.setFontSize(14);doc.setTextColor(11,105,255);
+  if(y>270){doc.addPage();y=20;}
+  doc.text(title,12,y);y+=7;
+  doc.setDrawColor(11,105,255);doc.setLineWidth(0.5);doc.line(12,y,198,y);
+  y+=8;doc.setFontSize(12);doc.setTextColor(0,0,0);
+  return y;
+}
 
 /*
   addImagesGrid_FAST:
@@ -1139,6 +1154,7 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
 
