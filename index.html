@@ -1036,6 +1036,7 @@ async function addImagesGrid_FAST(doc, y, refs, label, imageCache){
 
 /* ===== Export Button Handler (uses the new grid) ===== */
 document.getElementById("exportPDFBtn").onclick = async () => {
+ alert("PDF Export beginning please wait");
   try {
 const ok = await validateRequiredFields();
   if (!ok) return;
@@ -1146,7 +1147,7 @@ const ok = await validateRequiredFields();
       } catch (err) {
     console.error("PDF Export failed:", err);
     alert("PDF export failed — check console for details."+ err);
-  }
+  alert("Export complete!");
 };
   
 
@@ -1154,6 +1155,7 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
 
