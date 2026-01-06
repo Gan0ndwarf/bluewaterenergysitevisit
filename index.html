@@ -161,7 +161,17 @@ function openDB(){return new Promise((res,rej)=>{const rq=indexedDB.open('sitevi
 async function putBlob(id, blob){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('images','readwrite');tx.objectStore('images').put({id,blob});tx.oncomplete=()=>res(true);tx.onerror=e=>rej(e.target.error);});}
 async function getBlob(id){const db=await openDB();return new Promise((res,rej)=>{const rq=db.transaction('images').objectStore('images').get(id);rq.onsuccess=e=>res(e.target.result?e.target.result.blob:null);rq.onerror=e=>rej(e.target.error);});}
 function genId(){return 'img_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
+async function initApp() {
+  // ensure IndexedDB is initialized at least once
+  await openDB();
 
+  // now it is safe to render prior visits
+  renderVisits();
+}
+  document.addEventListener("DOMContentLoaded", () => {
+  initApp();
+});
+  
 /* ---------------- PREVIEW WITH CLICK-TO-DELETE ---------------- */
 function renderPreview(previewDiv, url, id, inputId) {
   const img = document.createElement('img');
@@ -1156,6 +1166,7 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
 
