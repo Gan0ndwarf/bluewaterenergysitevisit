@@ -1046,7 +1046,17 @@ async function addImagesGrid_FAST(doc, y, refs, label, imageCache){
 
 /* ===== Export Button Handler (uses the new grid) ===== */
 document.getElementById("exportPDFBtn").onclick = async () => {
- alert("PDF Export beginning please wait");
+   const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  if(!currentVisit)currentVisit={};
+  inputs.forEach(i=>{
+    if(i.type==="radio"){if(i.checked)currentVisit[i.name]=i.value;}
+    else if(i.type!=="file"){currentVisit[i.id]=i.value;}
+  });
+  if(typeof currentVisit.idx==="number")visits[currentVisit.idx]=currentVisit;
+  saveVisits();renderVisits();alert("Site Visit Saved!");
+
+  
+  alert("PDF Export beginning please wait");
   try {
 const ok = await validateRequiredFields();
   if (!ok) return;
@@ -1166,6 +1176,7 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
 
