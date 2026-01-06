@@ -1021,7 +1021,8 @@ async function addImagesGrid_FAST(doc, y, refs, label, imageCache){
 
 /* ===== Export Button Handler (uses the new grid) ===== */
 document.getElementById("exportPDFBtn").onclick = async () => {
-  const ok = await validateRequiredFields();
+  try {
+const ok = await validateRequiredFields();
   if (!ok) return;
 
   const { jsPDF } = window.jspdf;
@@ -1127,9 +1128,16 @@ document.getElementById("exportPDFBtn").onclick = async () => {
 
   const safeTitle = (currentVisit?.svSiteTitle || "Site_Visit").replace(/[\\\/:*?"<>|]/g, "_");
   doc.save(`${safeTitle}.pdf`);
+      } catch (err) {
+    console.error("PDF Export failed:", err);
+    alert("PDF export failed — check console for details.");
+  }
 };
+  
+
 
 </script>
 </body>
 </html>
+
 
