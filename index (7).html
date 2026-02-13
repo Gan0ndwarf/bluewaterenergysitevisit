@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bluewater Site Visit Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b69ff">
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js")
+    .then(() => console.log("Service Worker registered"))
+    .catch(()=>{});
+}
+</script>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,Arial; margin:0; padding:12px; background:#f6f7fb; color:#111;}
+h1{background:#0b69ff; color:white; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;}
+.btn{padding:8px 12px; border-radius:6px; border:0; cursor:pointer;}
+.btn.primary{background:#0b69ff; color:white;}
+.btn.secondary{background:#ff6a00; color:white;}
+.card{background:white; padding:12px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.08); margin-bottom:12px; border-left:6px solid #0b69ff;}
+.hidden{display:none;}
+img.preview{max-width:120px; margin:4px; border:1px solid #ccc; border-radius:6px;}
+img.preview.missing{border:2px solid red;}
+.required::after{content:" *"; color:red;}
+table{border-collapse:collapse; width:100%; margin-top:6px;}
+th,td{border:1px solid #ccc; padding:4px;}
+textarea { width: 98%; min-height: 120px; resize: vertical; font-size: 16px; padding: 8px; }
+h3{color:#0b69ff; border-bottom:2px solid #ff6a00; padding-bottom:4px;}
+.preview-container{display:flex; flex-wrap:wrap; margin-top:4px;}
+label{display:block; margin-top:10px;}
+label.missing{color:red;}
+#partResults div {padding:6px; background:#f0f0f0; margin-top:2px; border-radius:4px; cursor:pointer;}
+#partResults div:hover {background:#dce6ff;}
+</style>
+</head>
+<body>
+
+<h1>Bluewater Site Visit Tracker</h1>
+
+<!-- Job List -->
+<div id="jobListView" class="card">
+  <button class="btn primary" id="newVisitBtn">+ New Site Visit</button>
+  <div id="visitsContainer"></div>
+</div>
+
+<!-- Form -->
+<div id="siteVisitForm" class="form-section hidden card">
+  <h2>Site Visit Form</h2>
+
+  <label class="required">Site Title:<br><input type="text" id="svSiteTitle" data-required="true"></label>
+  <label class="required">Date of Site Visit:<br><input type="date" id="svDate" data-required="true"></label>
+  <label class="required">Team Member(s):<br><textarea id="svTeam" data-required="true"></textarea></label>
+  <label>Time Departed Shop:<br><input type="time" id="svDepart"></label>
+  <label>Arrival Time at Site:<br><input type="time" id="svArrival"></label>
+
+  <label class="required">Picture of Home:<br><input type="file" id="svHomePic" accept="image/*" multiple data-required="true"></label>
+  <div id="svHomePicPreview" class="preview-container"></div>
+
+   <h3>Roof Assessment</h3>
+  <label>Roof Assessed:<br>
+    <input type="radio" name="svRoofAssessed" value="Yes">Yes
+    <input type="radio" name="svRoofAssessed" value="No">No
+  </label>
+  <label>Type of Roof:<br><input type="text" id="svRoofType"></label>
+  <label>Condition of Roof:<br><textarea id="svRoofCondition"></textarea></label>
+  <label>Drone Flight Completed:<br><textarea id="svDrone"></textarea></label>
+
+  <label>Attic Inspection:<br>
+    <input type="radio" name="svAttic" value="Yes">Yes
+    <input type="radio" name="svAttic" value="No">No
+  </label>
+  <label>Top Chord Size:<br><input type="text" id="svTopChord"></label>
+  <label>Bottom Chord Size:<br><input type="text" id="svBottomChord"></label>
+  <label>Truss Spacing:<br><input type="text" id="svTrussSpacing"></label>
+  <label>Top Chord Span:<br><input type="text" id="svTopSpan"></label>
+  <label>Roof Access Issues:<br><textarea id="svRoofIssues"></textarea></label>
+
+  <label>Attic Pictures:<br><input type="file" id="svAtticPics" accept="image/*" multiple></label>
+  <div id="svAtticPicsPreview" class="preview-container"></div>
+
+  <h3>Electrical Service</h3>
+  <label>Inspection:<br><textarea id="svServiceInspection"></textarea></label>
+  <label>Routing:<br><textarea id="svRouting"></textarea></label>
+  <label>Service Size:<br><input type="text" id="svServiceSize"></label>
+  <label>Main Panel Rating:<br><input type="text" id="svBusRating"></label>
+  <label>Main Breaker Rating:<br><input type="text" id="svMainBreaker"></label>
+  <label>Utility Meter Location:<br><textarea id="svMeterLoc"></textarea></label>
+  <label>Main Panel Location:<br><textarea id="svPanelLoc"></textarea></label>
+  <label>Distance Meter to Panel:<br><input type="text" id="svDistance"></label>
+  <label>Existing Generator:<br><textarea id="svGenerator"></textarea></label>
+  <label>Pictures of Electrical Equipment:<br><input type="file" id="svEquipPics" accept="image/*" multiple></label>
+  <div id="svEquipPicsPreview" class="preview-container"></div>
+
+  <label>Equipment Locations:<br><textarea id="svEquipLocs"></textarea></label>
+  <label>Inverter Location:<br><textarea id="svInvLoc"></textarea></label>
+  <label>Inverter Pictures:<br><input type="file" id="svInvLocPic" accept="image/*" multiple></label>
+  <div id="svInvLocPicPreview" class="preview-container"></div>
+
+  <label>Battery Location:<br><textarea id="svBattLoc"></textarea></label>
+  <label>Transfer Switch/TEG/BUI Location:<br><textarea id="svTransferLoc"></textarea></label>
+  <label>Distance DC Cable Run:<br><input type="text" id="svDCDistance"></label>
+  <label>Distance AC Inv-Switch:<br><input type="text" id="svACInvSwitch"></label>
+  <label>Distance AC Switch-POC:<br><input type="text" id="svACSwitchPOC"></label>
+
+  <label>Pictures of Equipment Locations:<br><input type="file" id="svEquipLocPics" accept="image/*" multiple></label>
+  <div id="svEquipLocPicsPreview" class="preview-container"></div>
+
+  <label>Connection Details:<br><textarea id="svConnDetails"></textarea></label>
+
+  <h3>Site Requirements</h3>
+  <label>Is a DiR Required:<br>
+    <input type="radio" name="svDiR" value="Yes">Yes
+    <input type="radio" name="svDiR" value="No">No
+  </label>
+  <label>Would a Meter Pull Work:<br>
+    <input type="radio" name="svMeterPull" value="Yes">Yes
+    <input type="radio" name="svMeterPull" value="No">No
+  </label>
+  <label>Where is POC Being Made:<br><textarea id="svPOC"></textarea></label>
+  <label>Is Trenching Required:<br>
+    <input type="radio" name="svTrenching" value="Yes">Yes
+    <input type="radio" name="svTrenching" value="No">No
+  </label>
+  <label>Trench Distance:<br><input type="text" id="svTrenchDistance"></label>
+  <label>Equipment Rental Required:<br><textarea id="svEquipRental"></textarea></label>
+
+  <h3>Required Equipment</h3>
+  <input type="text" id="partSearch" placeholder="Search parts..." oninput="filterParts()">
+  <button type="button" class="btn secondary" onclick="addCustomPart()">Add Custom</button>
+  <div id="partResults"></div>
+  <table>
+    <thead><tr><th>Equipment</th><th>Qty</th><th></th></tr></thead>
+    <tbody id="partsTable"></tbody>
+  </table>
+
+  <h3>Additional Details</h3>
+  <label>Additional Comments:<br><textarea id="svAddComments"></textarea></label>
+  <label>Additional Costs:<br><textarea id="svAddCosts"></textarea></label>
+  <label>Additional Permitting:<br><textarea id="svAddPermits"></textarea></label>
+  <label>Additional Labour:<br><textarea id="svAddLabour"></textarea></label>
+  <label>Additional Breakers:<br><textarea id="svAddBreakers"></textarea></label>
+  <label>Additional Wire:<br><textarea id="svAddWire"></textarea></label>
+  <label>Additional Items:<br><textarea id="svAddItems"></textarea></label>
+
+  <h3>Wrap Up</h3>
+  <label>Time Departed Site:<br><input type="time" id="svDepartSite"></label>
+  <label>Return Time:<br><input type="time" id="svReturn"></label>
+
+  <br><br>
+  <button class="btn primary" id="saveVisitBtn">Save Site Visit</button>
+  <button class="btn secondary" id="backListBtn">Back to List</button>
+  <button class="btn primary" id="exportPDFBtn">Export PDF</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+/* ---------------- IMAGE STORAGE (IndexedDB) ---------------- */
+function openDB(){return new Promise((res,rej)=>{const rq=indexedDB.open('sitevisit_images',1);rq.onupgradeneeded=e=>{try{e.target.result.createObjectStore('images',{keyPath:'id'});}catch{}};rq.onsuccess=e=>res(e.target.result);rq.onerror=e=>rej(e.target.error);});}
+async function putBlob(id, blob){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('images','readwrite');tx.objectStore('images').put({id,blob});tx.oncomplete=()=>res(true);tx.onerror=e=>rej(e.target.error);});}
+async function getBlob(id){const db=await openDB();return new Promise((res,rej)=>{const rq=db.transaction('images').objectStore('images').get(id);rq.onsuccess=e=>res(e.target.result?e.target.result.blob:null);rq.onerror=e=>rej(e.target.error);});}
+function genId(){return 'img_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
+async function initApp() {
+  // ensure IndexedDB is initialized at least once
+  await openDB();
+
+  // now it is safe to render prior visits
+  renderVisits();
+}
+  document.addEventListener("DOMContentLoaded", () => {
+  initApp();
+});
+  
+/* ---------------- PREVIEW WITH CLICK-TO-DELETE ---------------- */
+function renderPreview(previewDiv, url, id, inputId) {
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'preview';
+  img.title = "Click to delete";
+  img.style.cursor = "pointer";
+  img.addEventListener('click', async () => {
+    if (confirm("Delete this image?")) {
+      previewDiv.removeChild(img);
+      const idx = currentVisit[inputId].indexOf(id);
+      if (idx > -1) currentVisit[inputId].splice(idx, 1);
+      saveVisits();
+      const db = await openDB();
+      const tx = db.transaction('images', 'readwrite');
+      tx.objectStore('images').delete(id);
+    }
+  });
+  previewDiv.appendChild(img);
+}
+function clearPreview(previewDiv){if(previewDiv)previewDiv.innerHTML='';}
+
+/* ---------------- CORE DATA LOGIC ---------------- */
+const STORE_KEY="site_visits";
+let visits=JSON.parse(localStorage.getItem(STORE_KEY)||"[]");
+let currentVisit=null;
+function saveVisits(){try{localStorage.setItem(STORE_KEY,JSON.stringify(visits));}catch(e){alert("Storage full. Cannot save more visits.");}}
+function renderVisits(){const c=document.getElementById("visitsContainer");c.innerHTML="";if(!visits.length){c.innerHTML="<i>No site visits yet</i>";return;}visits.forEach((v,i)=>{const d=document.createElement("div");d.className="card";d.style.cursor="pointer";d.innerHTML=`${v.svSiteTitle||"(untitled)"} — ${v.svDate||""} <button onclick="deleteVisit(${i});event.stopPropagation()">❌</button>`;d.onclick=()=>openVisit(i);c.appendChild(d);});}
+function deleteVisit(i){if(confirm("Delete this visit?")){visits.splice(i,1);saveVisits();renderVisits();}}
+function newVisit(){currentVisit={};visits.push(currentVisit);saveVisits();openVisit(visits.length-1);}
+
+/* ---------------- OPEN VISIT ---------------- */
+async function openVisit(idx){
+  currentVisit=visits[idx];currentVisit.idx=idx;
+  document.getElementById("jobListView").classList.add("hidden");
+  document.getElementById("siteVisitForm").classList.remove("hidden");
+  const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  for(const el of inputs){
+    el.classList.remove('missing');
+    if(el.type==="radio"){
+      const radios=document.getElementsByName(el.name);
+      radios.forEach(r=>r.checked=(r.value===currentVisit[el.name]));
+    } else if(el.type!=="file"){
+      el.value=currentVisit[el.id]||"";
+    }
+  }
+  const imageInputs=document.querySelectorAll('input[type="file"]');
+  for(const input of imageInputs){
+    const refs=currentVisit[input.id]||[];
+    const previewDiv=document.getElementById(input.id+"Preview");
+    clearPreview(previewDiv);
+    for(const id of refs){
+      const blob=await getBlob(id);
+      if(blob) renderPreview(previewDiv, URL.createObjectURL(blob), id, input.id);
+    }
+  }
+}
+
+/* ---------------- NAVIGATION ---------------- */
+function backToList(){document.getElementById("jobListView").classList.remove("hidden");document.getElementById("siteVisitForm").classList.add("hidden");}
+document.getElementById("newVisitBtn").onclick=newVisit;
+document.getElementById("backListBtn").onclick=backToList;
+
+/* ---------------- FILE HANDLERS ---------------- */
+document.querySelectorAll('input[type="file"]').forEach(input=>{
+  const previewDiv=document.getElementById(input.id+"Preview");
+  input.addEventListener('change',async e=>{
+    clearPreview(previewDiv);
+    const files=Array.from(e.target.files||[]);
+    const ids=[];
+    for(const f of files){
+      const id=genId();await putBlob(id,f);ids.push(id);renderPreview(previewDiv,URL.createObjectURL(f), id, input.id);
+    }
+    if(!currentVisit)currentVisit={};
+    currentVisit[input.id]=ids;saveVisits();
+  });
+});
+
+/* ---------------- SAVE VISIT ---------------- */
+document.getElementById("saveVisitBtn").onclick=()=>{
+  const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  if(!currentVisit)currentVisit={};
+  inputs.forEach(i=>{
+    if(i.type==="radio"){if(i.checked)currentVisit[i.name]=i.value;}
+    else if(i.type!=="file"){currentVisit[i.id]=i.value;}
+  });
+  if(typeof currentVisit.idx==="number")visits[currentVisit.idx]=currentVisit;
+  saveVisits();renderVisits();alert("Site Visit Saved!");
+};
+
+
+/* ---------------- VALIDATE REQUIRED ---------------- */
+async function validateRequiredFields() {
+  const missing = [];
+  const required = document.querySelectorAll('[data-required="true"]');
+
+  for (const el of required) {
+    el.classList.remove('missing');
+
+    // Get user-friendly label text
+    const label = document.querySelector(`label[for="${el.id}"]`) || el.closest("label");
+    const labelText = label ? label.textContent.replace(/\s*:\s*$/, "").trim() : el.id;
+
+    if (el.type === "file") {
+      const refs = currentVisit?.[el.id] || [];
+      if (!refs.length) {
+        missing.push(labelText);
+        el.classList.add('missing');
+        if (label) label.classList.add('missing');
+      }
+    } else if (el.type === "radio") {
+      const group = document.getElementsByName(el.name);
+      const checked = Array.from(group).some(r => r.checked);
+      if (!checked) {
+        missing.push(labelText || el.name);
+        group.forEach(r => r.classList.add('missing'));
+        if (label) label.classList.add('missing');
+      }
+    } else if (!el.value.trim()) {
+      missing.push(labelText);
+      el.classList.add('missing');
+      if (label) label.classList.add('missing');
+    }
+  }
+
+  if (missing.length) {
+    alert("Cannot export PDF. Missing required fields:\n- " + missing.join("\n- "));
+    return false;
+  }
+
+  return true;
+}
+
+/* ---------------- REQUIRED EQUIPMENT ---------------- */
+function normalize(str){return str.toLowerCase().replace(/[^a-z0-9]/g,'');}
+const partsList=[{search:"6/3 nmd",office:"W-NMD90-6/3C"},{search:"1 inch teck connector",office:"TEKCON-100"},{search:"HB SKYRAIL3 FLUSH MOUNT- 5.945M LONG EXTRUSION FOR CLICLOC CLAMP", office:"HB-8395-5945"},
+  {search:"FLUSH MOUNT SPLICE BAR FOR SKYRAIL3 WITH BONDING WASHER", office:"HB-1946"},
+  { search:"HB FLASHGUARD FLASHING KIT - MILL FINISH", office:"HB-99103" },
+  { search:"HBSOLAR STANDING SEAM CLAMP WITH ONE TOP HOLE, 2 SIDE HOLES", office:"HB-98121-02" },
+  { search:"HBSOLAR MB2 MIRACLE CONNECTING BRACKET KIT (4.7MM THICK)", office:"HB-92873" },
+  { search:"HBSOLAR MID-CLAMP UNIVERSAL WITH INTEGRATED BONDING/GROUNDING", office:"HB-1421b_MC" },
+  { search:"HB END CLAMP FOR 30MM FRAME THICKNESS WITH INTEGRATED BONDING/ GROUNDING", office:"HB-1422b-EC_30" },
+  { search:"END CLAMP 32MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_32" },
+  { search:"END CLAMP 35MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_35" },
+  { search:"END CLAMP 40MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_40" },
+  { search:"HBSOLAR MID-CLAMP UNIVERSAL BLACK ANODIZED WITH INTEGRATED BONDING/GROUNDING", office:"HB-1421b_MCB" },
+  { search:"BLACK END CLAMP 35MM FRAME THICKNESS, WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-ECB_35" },
+  { search:"TBOLT M8 X 20mm", office:"HB-3220" },
+  { search:"T-BOLT M8 X 20MM FOR T8 SLOT SS - FOR MICROINVERTER W/ SKYRAIL 3", office:"HB-3220 T8" },
+  { search:"HB FLANGE NUT M8 WITH SERRATION", office:"HB-3501" },
+  { search:"HBSOLAR L-FOOT, STANDARD", office:"HB-1831" },
+  { search:"HB SOLAR L-FOOT- KITTED FOR HANGAR BOLT (W T-BOLT/NUT)", office:"HB-91831" },
+  { search:"L FOOT KITTED FOR ROOF CHANNEL/AG BRACKET (WITH SLIDE NUT/T-BOLT/NUT", office:"HB-91831-01" },
+  { search:"HBSOLAR ROOF CHANNEL TYPE C 6.1M LONG WITH BUTYL TAPE", office:"HB-98330-6100" },
+  { search:"HB SOLAR AG BRACKET WITH BUTYL TAPE", office:"HB-8321" },
+  { search:"KINETIC SOLAR SQUIRREL GUARD 6\"\" 100FT ROLL", office:"KIN-KHSG6-M" },
+  { search:"KINETIC SOLAR SQUIRREL GUARD 8\"\" 100FT ROLL", office:"KIN-KHSG8-M" },
+  { search:"KINETIC STAINLESS J HOOK FOR SQUIRREL GUARD PACK OF 100", office:"KIN-KHSG-J" },
+  { search:"ALL-BLACK SOLATRIM GEN2 BARRIER PANEL 5.5\"\" X 48\"\", 100FT ROLL", office:"SOLATRIM-GEN2" },
+  { search:"S-5! N MINI STANDING SEAM CLAMP - FOR NAIL STRIP ROOFS - 1\"\"", office:"S5-N-MINI" },
+  { search:"S-5!-N MINI STANDING SEAM CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-N-1.5-MINI-WB" },
+  { search:"S-5!-N MINI STANDING SEAM CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-NH-1.5-MINI-WB" },
+  { search:"S-5! S STANDARD CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-S" },
+  { search:"S-5! S MINI CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-S-MINI" },
+  { search:"S-5! E MINI CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-E-MINI" },
+  { search:"S-5!-S M8 BOLT 16MM", office:"S5-M8 BOLT" },
+  { search:"S5 PROTEA BRACKER EXPOSED FASTENER", office:"S5-Protea Bracket" },
+  { search:"S-5! CORRUBRACKET - MOUNTING BRACKET FOR CORRUGATED STEEL ROOF", office:"S5-CORRU" },
+  { search:"Metal to Wood screws 2.5\"\" length", office:"S5 Metal to Wood screws 2.5\"\" length" },
+  { search:"ROOF-TECH MINI 2 BASE + 2 SCREWS, COMES WITH FLANGE BOLT & NUT", office:"RT-RT2-MINI2" },
+  { search:"ROOF-TECH MINI 2 SCREW 5X60 FOR MINI 2 BASE (SOLD AS 100 PACK)", office:"RT-RT2-04-SD5-60" },
+  { search:"ROOF TECH ROOF ENTRY BRACKET - WIRE MANAGEMENT SYSTEM", office:"RT-RT3-04-RFEBBK" },
+  { search:"EJOT 180/70 FZD SOLAR FASTENER SCREW FOR TIMBER SUBSTRUCTURE", office:"EJOT-JA3-SB-8.0-180/70" },
+  { search:"EJOT 130/70 FZD SOLAR FASTENER SCREW FOR TIMBER SUBSTRUCTURE", office:"EJOT-JA3-SB-8.0-130/70" },
+  { search:"ORKAN STORM WASHER TRAPEZOIDAL 35-47 ALU-RAIL, VE 100", office:"EJOT-ORKAN-KALOTTE-35-47" },
+  { search:"THORNOVA TS-BBT54 425W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BBT54-425W" },
+  { search:"THORNOVA TS-BB66 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BB66-500W" },
+  { search:"THORNOVA TS-BGT54 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BGT54-500W" },
+  { search:"THORNOVA TS-BBT54 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL - QTY 682", office:"THOR-TS-BBT54-500W" },
+  { search:"LONGI ‐ LR5‐54HPB‐410 BLK, 54/10CELL, MONO, 30MM, STAUBLI MC4", office:"LON-LR5-54HBP-410BLK" },
+  { search:"LONGI - LR7-54HGBB-440M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-440M" },
+  { search:"LONGI - LR7-54HGBB-445M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-445M" },
+  { search:"LONGI - LR7-54HGBB-450M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-450M" },
+  { search:"LONGI - LR4-72HPH-450 72/144CELL MONO, 35mm", office:"LON-LR4-72HPH 450" },
+  { search:"LONGI - LR4-72HPH-460M SOLAR PV MODULE, 72/144CELL MONO, 35MM", office:"LON-LR4-72HPH-460M" },
+  { search:"LONGI 500W SOLAR PV MODULE, 66 CELL, 35MM, SILVER/WHITE", office:"LON-LR5-66HPH-500M" },
+  { search:"LONGI SOLAR 505W MONOFACIAL PV MODULE", office:"LON-LR5-66HPH-505M" },
+  { search:"LONGI SOLAR 550W MONOFACIAL PV MODULE", office:"LON-LR5-72HPH-550M" },
+  { search:"LONGI 360W ALL-BLACK 60 CELL MONO SOLAR MODULE, 35MM, MC4", office:"LON-LR4-60HPB-360M" },
+  { search:"LONGI - LR8-54HGBB-500M, 54/108 CELL, (ALL BLACK - BIFACIAL) N-TYPE HPDC", office:"LON-LR8-54HGBB-500M" },
+  { search:"SOLAREDGE OPTIMIZER 505W MC4 83V", office:"SE-P505" },
+  { search:"SOLAREDGE OPTIMIZER S-500B, UP TO 500W PV MODULE", office:"SE-S500B" },
+  { search:"SOLAREDGE S650B OPTIMIZER 650W", office:"SE-S650B" },
+  { search:"SOLAREDGE OPTIMIZER 440W/60V 15A INPUT MCA 1000VDC cUL", office:"SE-S440 (Waiting on 1 replacement for RMA, Kwan, April 8)" },
+  { search:"GENERAC CLEAN ENERGY SYSTEMS PV LINK, 2500W MPPT SUBSTRING OPTIMIZER", office:"GCE-APKE00010" },
+  { search:"MID-CIRCUIT INTERRUPTER GEN 2 (MCI-2) / RAPID SHUTDOWN (RSD) FOR POWERWALL, 31879359-00-X", office:"TESLA-MCI-2" },
+  { search:"APSYSTEMS RAPID SHUTDOWN SYSTEM", office:"APS-RSD-S-PLC" },
+  { search:"FRONIUS RAPID SHUT DOWN BOX FOR PRIMO - DUO, 600V DC", office:"FR-RAPID-DUO" },
+  { search:"FRONIUS RAPID SHUT DOWN BOX FOR PRIMO - QUATTRO, 600V SDC", office:"FR-RAPID-QUATTRO" },
+  { search:"FRONIUS PRIMO 7.6-1 208-240 ADVANCED", office:"FR-PRIMO-7.6-1 A" },
+  { search:"FRONIUS PRIMO 8.2-1 208-240 ADVANCED", office:"FR-PRIMO-8.2-1 A" },
+  { search:"FRONIUS PRIMO 10.0-1 208-240 ADVANCED", office:"FR-PRIMO-10.0-1" },
+  { search:"FRONIUS PRIMO GEN24 208-240 7.7kW", office:"FR-PRIMO-GEN24 7.7kW" },
+  { search:"SMA 3800W SUNNY BOY W/DC DISCO, AFCI, RSD - SUNSPEC", office:"SMA-SB3.8-1SP-US-41" },
+  { search:"SMA 7000W SUNNY BOY W/DC DISCO, AFCI, RSD-SUNSPEC", office:"SMA-SB7.0-1SP-US-41" },
+  { search:"GENERAC CLEAN ENERGY SYSTEMS PWRCELL INVERTER, 7.6KW SINGLE-PHASE SYSTEM", office:"GCE-APKE00014" },
+  { search:"TESLA POWERWALL 3 AC, 13.5 KWH AC BATTER WITH 11.5 KW SOLAR INVERTER, 1707000", office:"TESLA-POWERWALL 3" },
+  { search:"TESLA ENERGY GATEWAY 3.0", office:"TESLA-GTW-3.0" },
+  { search:"SOLAREDGE SE5000H-US 5.0KW HD WAVE GRID-TIED INVERTER 240V 1-P", office:"SE-5000H-US" },
+  { search:"SOLAREDGE SE6000H-US 6.0KW HD WAVE GRID-TIED INVERTER 240V 1-P", office:"SE-6000H-US" },
+  { search:"SOLAREDGE SE7600H-US 7.6KW HD WAVE GRID-TIED INVERTER 240V 1-P", office:"SE-7600H-US" },
+  { search:"SOLAREDGE SE10000H-US 10KW HD WAVE GRID-TIED INVERTER 240V 1-P", office:"SE-10000H-US" },
+  { search:"SOLAREDGE 7.6KW HOME HUB INVERTER - SE7600H-USSNBBL14", office:"SE-BAT-7600H-HUB" },
+  { search:"SOLAREDGE SE9600H-USMNUBL75 - 9.6KW HOME HUB INVERTER", office:"SE-BAT-9600H-HUB" },
+  { search:"SOLAREDGE SE10000H-USMNFBL15 10KW HOME HUB INVERTER FOR RE-ENERGIZE PROGRAM", office:"SE-BAT-10000H-HUB-RE" },
+  { search:"SOLAREDGE SE10000H-USSNBBL14 10KW HOME HUB INVERTER", office:"SE-BAT-10000H-HUB" },
+  { search:"SAVANT POWER INVERTER WITH DIRECTOR - 100A - 12.5KW", office:"SAV-PS-INV-12.5KW" },
+  { search:"FORTRESS POWER ENVY TRUE 12 KW BATTERY", office:"FOR-ENVY-12KW" },
+  { search:"TESLA EXPANSION 3 FOR POWERWALL 3 SYSTEM, 13.5 KWH DC BATTERY, 1807000", office:"TESLA-EXP-3" },
+  { search:"SOLAREDGE BACKUP INTERFACE UNIT, BI-NUSGN-02, NO MAIN BREAKER", office:"SE-BAT-BUI-NUSGN-02" },
+  { search:"SAVANT POWER STORAGE 20 BATTERY STACK - 20KWH - WITH ENCLOSURE", office:"SAV-PS20-BATT-20KWH" },
+  { search:"SOLAREDGE BATTERY FOR HOME ENERGY STORAGE SYSTEMS, 10KWH ENERGY BANK", office:"SE-BAT-10K1PS0B" },
+  { search:"FORTRESS POWER eVAULT MAX 18.5 kWh BATTERY", office:"FOR-EVAULT-MAX-18.5KWh" },
+  { search:"SMARTER POWER 10KWH SMART BATTERY STORAGE SYSTEM", office:"SP-SBSS-10-10" },
+  { search:"SOLAREDGE 1 PH, 240V ELEC. METER, NEMA3R,", office:"SE-MTR240" },
+  { search:"SOLAREDGE 225A CLAMP STYLE CT, SLIM", office:"SE-CT-225A-T-20" },
+  { search:"TESLA REMOTE ENERGY MONITOR, INCL 2 CTS FOR PARTIAL HOME B/U", office:"TESLA-REM" },
+  { search:"SENSE PRO ENERGY MONITOR (WITHOUT SOLAR BUNDLE)", office:"SENSE ENERGY-MON" },
+  { search:"EMPORIA VUE GENERATION 3 WHOLE HOME ENERGY MONITOR WITH 2 X 200A CTS", office:"EMP-VUE" },
+  { search:"FORTRESS POWER GUARDIAN BATTERY MONITORING", office:"FOR-GUARDIAN-MON" },
+  { search:"TESLA POWERWALL 3 EXPANSION KIT FOR WALL-MOUNT CONFIGURATION, 1978069", office:"TESLA-EXP-3-WALL" },
+  { search:"TESLA POWERWALL 3 EXPANSION KIT FOR STACKED CONFIGURATION, 1978070", office:"TESLA-EXP-3-STACK" },
+  { search:"0.5M LONG HARNESS TO CONNECT TESLA POWERWALL 3 TO EXPANSION(S),1875157-05", office:"TESLA-EXP-3-HARNESS-05" },
+  { search:"2.0 M LONG HARNESS TO CONNECT TESLA POWERWALL 3 TO EXPANSION(S), 1875157-20", office:"TESLA-EXP-3-HARNESS-20" },
+  { search:"4.0 M LONG HARNESS TO CONNECT TESLA POWERWALL 3 TO EXPANSION(S), 1875157-40", office:"TESLA-EXP-3-HARNESS-40" },
+  { search:"POWER-STUD+ SD1 WEDGE ANCHOR ZINC 1/2X5-1/2\"\"", office:"POWER-STUD+ SD1 WEDGE ANCHOR ZINC 1/2X5-1/2\"\"" },
+  { search:"SOLAREDGE PARALLEL BRANCH CONNECTORS MC4, IAC-RBAT-USYCBL-01 FOR HUB INVERTER AND 2+ BATTERIES (PAIR)", office:"SE-BAT-USYCBL" },
+  { search:"IMO 2-STRING DC DISCONNECT WITH SAFE LOCK, 4P 32A 600V, IMO-2106", office:"IMO-SI32-PEL64R-4" },
+  { search:"IMO 4-STRING DC DISCONNECT WITH SAFE LOCK, 8P 48A 600V, IMO-2108", office:"IMO-SI40-PEL64R-8" },
+  { search:"MC4 CONNECTOR FEMALE", office:"MC4-F" },
+  { search:"MC4 CONNECTOR MALE", office:"MC4-M" },  
+  { search:"HBSOLAR STANDING SEAM CLAMP WITH ONE TOP HOLE, 2 SIDE HOLES", office:"HB-98121-02" },
+  { search:"T3-2-6.5 x 100mm Hex Screws for AG Bracket", office:"T3-2-6.5 x 100mm Hex Screws for AG Bracket" },
+  { search:"RT MINI NUT", office:"RT MINI NUT" },
+  { search:"RTMINI FLANGE", office:"RTMINI FLANGE" },
+  { search:"MERSEN PV FUSE MIDGET 15A", office:"FUSE-MER-PV-15A" },
+  { search:"MERSEN FUSE HOLDER USM-1", office:"MER-FUSE HOLDER - USM1" },
+  { search:"STANDARD SAFETY BOLLARD, FIXED, 4.5 X 36\"\"", office:"BOLLARD-STD" },
+  { search:"HEAVY DUTY SAFETY BOLLARD, FIXED, - 5.5 X 48\"\"", office:"BOLLARD-HVY" },
+  { search:"HEAVY DUTY BOLLARD SLEEVE - 6 X 56\"\", COLOURED, SMOOTH", office:"BOLLARD-HVY-SLEEVE" },
+  { search:"SMOOTH BOLLARD SLEEVE, WHITE, 5' X 52\"\"", office:"BOLLARD-STD-SLEEVE-W" },
+  { search:"SAVANT POWER DIRECTOR", office:"SAV-HST-DIRECTOR-00" },
+  { search:"SAVANT POWER DIRECTOR LITE ONE BLE RADIO", office:"SAV-HST-DIRECTORLITE-00" },
+  { search:"SAVANT Savant Power System Monitor", office:"SAV-SEM-2015-00" },
+  { search:"SAVANT CURRENT TRACK SENSOR, 250A", office:"SAV-SEM-250A2-00" },
+  { search:"SAVANT CURRENT TRACK SENSOR, 150A", office:"SAV-SEM-150A2-00" },
+  { search:"SMARTENERGY SENSOR 50A (5 PACK)", office:"SAV-SEM-050A5-00" },
+  { search:"SMARTENERGY SENSOR 20A (5 PACK)", office:"SAV-SEM-020A5-00" },
+  { search:"Savant Power System Voltage Sensor", office:"SAV-SEM-VT01-00" },
+  { search:"SAVANT QO SINGLE 60A POWER MODULE, PON", office:"SAV-GPM-QP1R60240-21" },
+  { search:"SAVANT QO SINGLE 30A POWER MODULE, PON", office:"SAV-GPM-QP1R30240-21" },
+  { search:"SAVANT QO DUAL 20A POWER MODULE, PON", office:"SAV-GPM-QP2R20120-21" },
+  { search:"QO SINGLE 60A POWER MODULE, PIGTAIL, 2P", office:"SAV-GPM-Q1R60240-21" },
+  { search:"QO SINGLE 30A POWER MODULE, PIGTAIL, 2P", office:"SAV-GPM-Q1R30240-21" },
+  { search:"QO DUAL 20A POWER MODULE, PIGTAIL, 1P", office:"SAV-GPM-Q2R20120-21" },
+  { search:"SAVANT 1-INCH SINGLE 60A POWER MODULE, PIGTAIL", office:"SAV-GPM-H1R60240-21" },
+  { search:"SAVANT 1-INCH SINGLE 30A POWER MODULE, PIGTAIL", office:"SAV-GPM-H1R30240-21" },
+  { search:"SAVANT 1-INCH DUAL 20A POWER MODULE, PIGTAIL", office:"SAV-GPM-H2R20120-21" },
+  { search:"SAVANT 1-INCH CURRENT TRACK MODULE, PIGTAIL", office:"SAV-GPM-H2SEM-00" },
+  { search:"SAVANT QO CURRENT TRACK MODULE, PIGTAIL", office:"SAV-GPM-Q2SEM-00" },
+  { search:"SAVANT PANEL BRIDGE CONTROLLER - POE", office:"SAV-PBC-P1000-00" },
+  { search:"SAVANT POWER DIRECTOR", office:"SAV-HST-DIRECTOR-00" },
+  { search:"SAVANT POWER DIRECTOR LITE ONE BLE RADIO", office:"SAV-HST-DIRECTORLITE-00" },
+  { search:"SAVANT Savant Power System Monitor", office:"SAV-SEM-2015-00" },
+  { search:"SAVANT CURRENT TRACK SENSOR, 250A", office:"SAV-SEM-250A2-00" },
+  { search:"SAVANT CURRENT TRACK SENSOR, 150A", office:"SAV-SEM-150A2-00" },
+  { search:"SMARTENERGY SENSOR 50A (5 PACK)", office:"SAV-SEM-050A5-00" },   
+  { search:"STANDARD SAFETY BOLLARD - 4.5 X 36\"", office:"BOLLARD" },
+  { search:"EATON BREAKERS", office:"EATON-BR" },
+  { search:"SIEMENS BREAKERS", office:"SIE-Q" },
+  { search:"SQUARE D BREAKERS", office:"SQRD-Q0" },
+  { search:"FPE BREAKERS", office:"BR-FPE-" },
+  { search:"SCHNEIDER BREAKERS", office:"SCH-BR CHOM" },
+  { search:"EATON METERBASE", office:"EATON-LM2" },
+  { search:"LEVITON BREAKERS", office:"LEV-LB" },
+  { search:"EATON 3R SWITCHES", office:"CDG___NRB" },
+  { search:"EATON NEMA 1 SWITCHES", office:"CDG___NGB" },
+  { search:"1/2IN BOX CONNECTOR BX", office:"BX-05" },
+  { search:"3/4\" BOX CONN BX", office:"BX-07" },
+  { search:"1\" BOX CONN BX", office:"BX-10" },
+  { search:"BX CONNECTOR - 90 DEG CONN, 1/2 INCH", office:"BX90-05" },
+  { search:"BX CONNECTOR-STRAIGHT 1/1/4\"", office:"BX-12" },
+  { search:"BX CONNECTOR - 90 DEG CONN, 3/4 INCH", office:"BX90-07" },
+  { search:"BX CONNECTOR - 90 DEG CONN, 1 INCH", office:"BX90-10" },
+  { search:"BX CONNECTOR - 90 DEG CONN, 1-1/4 INCH", office:"BX90-12" },
+  { search:"BX CONNECTOR - 90 DEG CONN, 2 INCH", office:"BX90-20" },
+  { search:"3/8\" AC90 DUPLEX CONN", office:"BXDUP-03" },
+  { search:"4PR 24CAT 5E PLENUM FT6 BLUE 305m", office:"24CAT5E" },
+  { search:"CAT 5E OUTDOOR BLACK", office:"CAT 5E-OUTDOOR" },
+  { search:"1/2IN BOX CONNECTOR BX", office:"BX-05" },
+  { search:"3/4IN BOX CONNECT BX", office:"BX-07" },
+  { search:"1IN BOX CONNECT BX", office:"BX-10" },
+  { search:"TWO-SCREW CABLE CONNECTOR, LOOMEX, SIZE 3/4 IN, ZINC ALLOY", office:"TWO-SCREW CABLE CONNECTOR" },
+  { search:"TECK CONNECTOR 1/2", office:"TEKCON-05" },
+  { search:"TECK CONNECTOR 3/4\"", office:"TEKCON-07" },
+  { search:"TECK CONNECTOR 1\"", office:"TEKCON-100" },
+  { search:"WIRE 1AWG-3C AL ACWU90", office:"W-1/3C-ACWU90" },
+  { search:"WIRE 2AWG-3C AL ACWU90", office:"W-2/3C-ACWU90" },
+  { search:"3C6 CU TECK CABLE 1KV", office:"W-6/3C TECK" },
+  { search:"3C8 CU TECK CABLE 1KV", office:"W-8/3C TECK" },
+  { search:"WIRE 6-1C 7STR RW90 90C GREEN", office:"W-6/1C-RW90 GRN" },
+  { search:"4C10 CU TECK CABLE 1K", office:"W-10/4C TECK" },
+  { search:"WIRE 6AWG-1C BARE COPPER SOFT", office:"W-6/1C-BARECU" },
+  { search:"WIRE T90 6 AWG-1C STRANDED-WHITE", office:"W-T90-6STR-W" },
+  { search:"WIRE T90 6AWG-1C STRANDED - BLACK", office:"W-T90-6STR-B" },
+  { search:"WIRE T90 6 AWG-1C STRANDED -RED", office:"W-T90-6STR-R" },
+  { search:"WIRE T90 6 AWG-1C STRANDED-GREEN", office:"W-T90-6STR-G" },
+  { search:"WIRE 14-3C NMD90 ROMEX", office:"W-NMD90-75M-14/3C" },
+  { search:"WIRE 6-3C NMD90 ROMEX", office:"W-NMD90-6/3C" },
+  { search:"WIRE 8-3C NMD90 ROMEX", office:"W-NMD90-8/3" },
+  { search:"WIRE NMD90 10-3C ROMEX ORANGE", office:"W-NMD90-10/3-OR" },
+  { search:"WIRE 14-2C NMD90 ROMEX", office:"W-NMD90-75M-14/2C" },
+  { search:"WIRE NMD90 12-2C ROMEX YELLOW 75M", office:"W-NMD90-12/2-YEL" },
+  { search:"WIRE 4/0 AUL RW90 WHITE", office:"W-4/0-RW90A-WHT" },
+  { search:"WIRE 4/0 AUL RW90 BLACK", office:"W-4/0-RW90A-BLK" },
+    { search:"JUNCTION BOX 1-7/8 in. Deep, 16.5 Cu. In.", office:"JB-" },
+  { search:"JUNCTION BOX PVC 4X4X2", office:"JB-4X4X2" },
+  { search:"JUNCTION BOX PVC 5X5X2", office:"JB-5X5X2" },
+  { search:"NEMA 1 - METAL JB 6X6X4", office:"JB-1100 DF060604" },
+  { search:"JUNCTION BOX 6X6X4 PVC", office:"JB-6X6X4" },
+  { search:"JUNCTION BOX PVC 8X8X4", office:"JB-8X8X4 PVC" },
+  { search:"NEMA 1 - METAL JB 8X8X4", office:"JB-1100 DF080804 - CSK0884" },
+  { search:"NEMA 1 - METAL JB 12X12X4", office:"JB-1100 DF121204" },
+  { search:"JUNCTION BOX 4-11/16\", SHALLOW", office:"JB-72151-K" },
+  { search:"NEMA 1 - METAL JB HINGED DOOR 8X8X4", office:"JB-1100-E080804" },
+  { search:"JUNCTION BOX 4-11/16\", DEEP", office:"JB-72171K" },
+  { search:"JB 4x4 SQUARE BOX 2-1/8\" DEEP", office:"JB-52171-K" },
+  { search:"NEMA 1 - METAL JB HINGED DOOR 12X12X6", office:"JB-1100EF121206" },
+  { search:"JB 4-11/16 INCH SQUARE BLANK COVER", office:"JB-SS-COVER 72C1" },
+ // 1/2" PVC
+{ search:"1/2\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-05" },
+{ search:"1/2\" PVC EXPANSION JOINT", office:"PVC-EJ05" },
+{ search:"1/2\" PVC FEMALE ADAPTER", office:"PVC-FA05" },
+{ search:"1/2\" PVC TERMINAL ADAPTOR", office:"PVC-TA05" },
+{ search:"1/2\" PVC LL FITTING", office:"PVC-LL05" },
+{ search:"1/2\" PVC LR FITTING", office:"PVC-LR05" },
+{ search:"1/2\" PVC LB FITTING", office:"PVC-LB05" },
+{ search:"1/2\" PVC T FITTING", office:"PVC-T05" },
+{ search:"1/2\" PVC PIPE STRAP", office:"PVC-PS05" },
+
+// 3/4" PVC
+{ search:"3/4\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-07" },
+{ search:"3/4\" PVC EXPANSION JOINT", office:"PVC-EJ07" },
+{ search:"3/4\" PVC FEMALE ADAPTER", office:"PVC-FA07" },
+{ search:"3/4\" PVC TERMINAL ADAPTOR", office:"PVC-TA07" },
+{ search:"3/4\" PVC LL FITTING", office:"PVC-LL07" },
+{ search:"3/4\" PVC LR FITTING", office:"PVC-LR07" },
+{ search:"3/4\" PVC LB FITTING", office:"PVC-LB07" },
+{ search:"3/4\" PVC T FITTING", office:"PVC-T07" },
+{ search:"3/4\" PVC PIPE STRAP", office:"PVC-PS07" },
+
+// 1" PVC (original)
+{ search:"1\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-10" },
+{ search:"1\" PVC EXPANSION JOINT", office:"PVC-EJ10" },
+{ search:"1\" PVC FEMALE ADAPTER", office:"PVC-FA10" },
+{ search:"1\" PVC TERMINAL ADAPTOR", office:"PVC-TA10" },
+{ search:"1\" PVC LL FITTING", office:"PVC-LL10" },
+{ search:"1\" PVC LR FITTING", office:"PVC-LR10" },
+{ search:"1\" PVC LB FITTING", office:"PVC-LB10" },
+{ search:"1\" PVC T FITTING", office:"PVC-T10" },
+{ search:"1\" PVC PIPE STRAP", office:"PVC-PS10" },
+
+// 2" PVC
+{ search:"2\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-20" },
+{ search:"2\" PVC EXPANSION JOINT", office:"PVC-EJ20" },
+{ search:"2\" PVC FEMALE ADAPTER", office:"PVC-FA20" },
+{ search:"2\" PVC TERMINAL ADAPTOR", office:"PVC-TA20" },
+{ search:"2\" PVC LL FITTING", office:"PVC-LL20" },
+{ search:"2\" PVC LR FITTING", office:"PVC-LR20" },
+{ search:"2\" PVC LB FITTING", office:"PVC-LB20" },
+{ search:"2\" PVC T FITTING", office:"PVC-T20" },
+{ search:"2\" PVC PIPE STRAP", office:"PVC-PS20" },
+
+// 2.5" PVC
+{ search:"2.5\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-25" },
+{ search:"2.5\" PVC EXPANSION JOINT", office:"PVC-EJ25" },
+{ search:"2.5\" PVC FEMALE ADAPTER", office:"PVC-FA25" },
+{ search:"2.5\" PVC TERMINAL ADAPTOR", office:"PVC-TA25" },
+{ search:"2.5\" PVC LL FITTING", office:"PVC-LL25" },
+{ search:"2.5\" PVC LR FITTING", office:"PVC-LR25" },
+{ search:"2.5\" PVC LB FITTING", office:"PVC-LB25" },
+{ search:"2.5\" PVC T FITTING", office:"PVC-T25" },
+{ search:"2.5\" PVC PIPE STRAP", office:"PVC-PS25" },
+
+// 3" PVC
+{ search:"3\" RIGID PVC CONDUIT (PER FOOT)", office:"PVC-30" },
+{ search:"3\" PVC EXPANSION JOINT", office:"PVC-EJ30" },
+{ search:"3\" PVC FEMALE ADAPTER", office:"PVC-FA30" },
+{ search:"3\" PVC TERMINAL ADAPTOR", office:"PVC-TA30" },
+{ search:"3\" PVC LL FITTING", office:"PVC-LL30" },
+{ search:"3\" PVC LR FITTING", office:"PVC-LR30" },
+{ search:"3\" PVC LB FITTING", office:"PVC-LB30" },
+{ search:"3\" PVC T FITTING", office:"PVC-T30" },
+{ search:"3\" PVC PIPE STRAP", office:"PVC-PS30" },
+
+  { search:"THRD STRAIN RELIEF PVC 3/4\" HUB", office:"PVC-TSRC15" },
+  { search:"THRD STRAIN RELIEF PVC 1/2\" HUB", office:"PVC-TSRC10" },
+  { search:"4\" BOX 14/50 COVER", office:"JB-8366" },
+  { search:"10-1C 19STR BC RPVU90 2KV BLACK", office:"W-10/1C-RPVU90B" },
+  { search:"14/50 FLUSH 50A 125/250 OUTLET", office:"REC-RANGE-279-S00" },
+  { search:"FEMALE MC4", office:"MC4-F" },
+  { search:"10-1C 19STR BC RPVU90 2 KV RED", office:"W-10/1C-RPVU90R" },
+  { search:"MALE MC4", office:"MC4-M" },
+  { search:"SOLAREDGE 1 PH, 240V ELEC. METER", office:"SE-MTR240" },
+  { search:"SOLAREDGE 10KW HD WAVE INV", office:"SE-10000H-US" },
+  { search:"SOLAREDGE 225A CT (count as 2)", office:"SE-CT-225A-T-20" },
+  { search:"SAVANT POWER DIRECTOR LITE ONE BLE RADIO", office:"SAV-HST-DIRECTORLITE-00" },
+  { search:"QO DUAL 20A POWER MODULE", office:"SAV-GPM-QP2R20120-21" },
+  { search:"QO SINGLE 30A POWER MODULE", office:"SAV-GPM-QP1R30240-21" },
+  { search:"QO SINGLE 60A POWER MODULE", office:"SAV-GPM-QP1R60240-21" },
+  { search:"SENSE PRO ENERGY (NO SOLAR)", office:"SENSE ENERGY-MON" },
+  { search:"Nesco ACD-2 - AC DISCONECT", office:"Nesco ACD-2" },
+  { search:"Siemens 60a non fused disconnect", office:"LNFC 222R" },
+  { search:"EATON AC ISO SWITCH 3GAC222NF", office:"EATON AC ISO SWITCH 3GAC222NF" },
+  { search:"Ground Bushing 1/2", office:"GNZ-105" },
+  { search:"Ground Bushing 3/4", office:"GBZ-107" },
+  { search:"Ground Bushing 1", office:"GNZ-110" },
+  { search:"Ground Bushing 2", office:"GBZ-200" },
+  { search:"Ground Bushing 1-1/2", office:"GNZ-115" },
+  { search:"Ground Bushing 1-3/4", office:"GBZ-117" },  
+  { search:"Ground Bushing 2-1/2", office:"GNZ-205" },
+  { search:"Ground Bushing 2-3/4", office:"GBZ-207" },
+  { search:"EATON 125A 4 Space Sub panel", office:"CCPL104" },
+  { search:"EATON 125A 8 Space Sub panel", office:"CCPL108" },
+  { search:"Ground Bushing 1\"", office:"GNZ-110" },
+  { search:"EATON FUSED DISCONNECT 60A", office:"CDG222NRB" },
+  { search:"EATON FUSED DISCONNECT 100A", office:"CDG223NRB" },
+  { search:"EATON FUSED DISCONNECT 200A", office:"CDG224NRK" },
+  { search:"PUSH BUTTON ASSEMBLY", office:"32W274" },
+  { search:"Eaton 60A AC Isolation Switch", office:"Dpb222r" },
+  { search:"16-4C Grey Cable 16-4C Belding Cable", office:"42AA1604U" },
+  { search:"Dome Connector 1/2\" NPT - Cat 5 Strain Relief", office:"RD13NA" },
+   { search: "FLASHED WEATHERPROOF ROOF ENTRY BOX", office: "ROOF-ENTRY" },
+  { search: "JUNCTION BOX 5X5X2 PVC", office: "JB-5X5X2" },
+  { search: "JUNCTION BOX 8IN X 8IN X 4IN - 3R", office: "JB-PVC-8X8X4" },
+  { search: "NEMA 1 - METAL JUNCTION BOX SCREW COVER 8X8X4", office: "JB-CSK0884" },
+  { search: "NEMA 1 - METAL JUNCTION BOX SCREW COVER 12X12X4", office: "JB-1100-DF080804" },
+  { search: "MULTI CONTACT MC4 PV-KBT4 FEMALE", office: "MC4-PV-FE" },
+  { search: "MULTI CONTACT MC4 PV-KBT4 MALE", office: "MC4-PV-MA" },
+  { search: "TOUCH SAFE FUSE HOLDER - SINGLE POLE", office: "FUSE-TS-HOLDER-1P" },
+  { search: "FUSE 15A", office: "FUSE-PV-15A" },
+  { search: "FUSE 20A", office: "FUSE-PV-20A" },
+  { search: "TECK CONNECTOR 3/4\", ALUMINIUM, WATERTIGHT", office: "TECKCON-07" },
+  { search: "TECK CONNECTOR 1/2\" , ALUMINUM, WATERTIGHT", office: "TEKCON-05" },
+  { search: "3/4\" ZINC GROUND BUSHING INSUL", office: "GBZ-107" },
+  { search: "1/2\" ZINC GROUND BUSHING INSUL", office: "GBZ-105" },
+  { search: "ALUMINIUM LAY IN LUG 14-4 SLT SCR", office: "LUG-LL14-4" },
+  { search: "NON-METALLIC LIQUIDTITE CONDUIT 1\" (per foot)", office: "NMLT-10" },
+  { search: "NON-METALLIC LIQUIDTITE TERMINAL ADAPTER STRAIGHT 1\"", office: "NMLT-TA-10" },
+  { search: "PV WIRE, 10AWG-1C, COPPER - RED (per metre)", office: "W-10-1C-RPVU90-R" },
+  { search: "PV WIRE, 10AWG-1C, COPPER - BLACK (per metre)", office: "W-10-1C-RPVU90-B" },
+  { search: "BOND WIRE, 6AWG-1C, COPPER, BARE (per metre)", office: "W-6-1C-BARE-CU" },
+  { search: "TECK CABLE 10AWG-2C COPPER, 1000V", office: "W-10-2C-TECK" },
+  { search: "TECK CABLE 10AWG-4C COPPER, 1000V", office: "W-10-4C-TECK" },
+  { search: "TECK CABLE 10AWG-6C COPPER, 1000V", office: "W-10-6C-TECK" },
+  { search: "TECK CABLE 10AWG-8C COPPER, 1000V", office: "W-10-8C-TECK" },
+  { search: "KINETIC RACKING CRITTER GUARD 6\"", office: "KIN-KHSG6-M" },
+  { search: "KINETIC RACKING CRITTER GUARD 8\"", office: "KIN-KHSG8-M" },
+  { search: "KINETIC SOLAR J-HOOKS BOX 100", office: "KIN-KHSG-J" },
+  { search: "SOLATRIM GEN 2 SQUIRREL GUARD, 100 FT, 25 X 5.5\"X 48\"", office: "ST-055" },
+  { search: "DISCONNECT SVC ENTRANCE RATED, FUSED, 3R SWTICH - 200A", office: "EATON-SVC-200" },
+  { search: "DISCONNECT SVC ENTRANCE RATED, FUSED, 3R SWITCH - 100A", office: "EATON-SVC-100" },
+  { search: "DISCONNECT SVC ENTRANCE RATED, FUSED, 3R SWITCH - 60A", office: "EATON-SVC-60" },
+  { search: "EATON 200A ENCLOSED SERVICE ENTRANCE BREAKER - 3R", office: "EATON-ECCSEGEN20R" },
+  { search: "EATON DOUBLE POLE, DOUBLE THROW SWTICH - 100A", office: "EATON-SW-DPDT-100" },
+  { search: "EATON DOUBLE POLE, DOUBLE THROW SWTICH - 60A", office: "EATON-SW-DPDT-60" },
+  { search: "SIEMENS GENERAL DUTY SWITCH 60A, 2-POLE, 3R OUTDOOR", office: "SIE-LNF222R" },
+  { search: "EATON 60A DISCONNECT, NEMA 3R, NON-SERVICE ENTRANCE RATED", office: "EATON-DPB222R" },
+  { search: "EMERGENCY STOP BUTTON FOR RAPID SHUTDOWN", office: "E-STOP" },
+  { search: "IMO 1-STRING DC DISCONNECT WITH SAFE LOCK, 4P 32A 600V, IMO-2104", office: "IMO-SI32-PEL64R-2" },
+  { search: "IMO 2-STRING DC DISCONNECT WITH SAFE LOCK, 4P 32A 600V, IMO-2106", office: "IMO-SI32-PEL64R-4" },
+  { search: "IMO 3-STRING DC DISCONNECT WITH SAFE LOCK, 4P 32A 600V, IMO-2107", office: "IMO-SI32-PEL64R-6" },
+  { search: "IMO 4-STRING DC DISCONNECT WITH SAFE LOCK, 8P 48A 600V, IMO-2108", office: "IMO-SI40-PEL64R-8" },
+  { search: "FUSE, FAST ACTING - 200A", office: "FUSE-200A" },
+  { search: "FUSE, FAST ACTING - 100A", office: "FUSE-100A" },
+  { search: "FUSE, FAST ACTING - 60A", office: "FUSE-60A" },
+  { search: "FUSE, FAST ACTING - 50A", office: "FUSE-50A" },
+  { search: "FUSE, FAST ACTING - 40A", office: "FUSE-40A" },
+  { search: "FUSE, FAST ACTING - 30A", office: "FUSE-30A" },
+  { search: "FUSE, FAST ACTING - 20A", office: "FUSE-20A" },
+  { search: "EATON BR STYLE LOAD CENTRE, 200A W/ 200A MAIN BRKR", office: "EATON-BR-200A" },
+  { search: "EATON BR STYLE LOAD CENTRE, 100A W/ 100A MAIN BRKR", office: "EATON-BR-100A" },
+  { search: "SCHNEIDER HOMELINE STYLE LOAD CENTRE, 225A W/200A MAIN BRKR", office: "SCH-HL-200A" },
+  { search: "SCHNEIDER SQUARE D, QO STYLE LOAD CENTRE, 225A W/200A MAIN BRKR", office: "SCH-SQRD-200A" },
+  { search: "SCHNEIDER HOMELINE LOAD CENTRE, 100A, 60 SPACE W/ 100A MB", office: "SCH-HL-100A-60C" },
+  { search: "SCHNEIDER HOMELINE LOAD CENTRE, 100A, 24 SPACE W/ 100A MB", office: "SCH-HL-100A-24C" },
+  { search: "SIEMENS LOAD CENTRE, 200A , 24 SPACE W/200A MB", office: "SIE-200A-24C" },
+  { search: "LEVITON PANEL, 225A LOAD CENTRE 30 SPACE, W/ 100A MB", office: "LEV-100A-30" },
+  { search: "SCHNEIDER CHOM BREAKER, 15A, 120V SINGLE-POLE", office: "SCH-BR-CHOM-115" },
+  { search: "SCHNEIDER CHOM BREAKER, 20A, 120V SINGLE-POLE", office: "SCH-BR-CHOM-120" },
+  { search: "SCHNEIDER CHOM BREAKER, 30A, 120V SINGLE-POLE", office: "SCH-BR-CHOM-130" },
+  { search: "SCHNEIDER CHOM BREAKER, 15A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-215" },
+  { search: "SCHNEIDER CHOM BREAKER, 20A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-220" },
+  { search: "SCHNEIDER CHOM BREAKER, 30A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-230" },
+  { search: "SCHNEIDER CHOM BREAKER, 40A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-240" },
+  { search: "SCHNEIDER CHOM BREAKER, 50A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-250" },
+  { search: "SCHNEIDER CHOM BREAKER, 60A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-260" },
+  { search: "SCHNEIDER CHOM BREAKER, 100A, 240V DOUBLE-POLE", office: "SCH-BR-CHOM-2100" },
+  { search: "HOMELINE TANDEM BREAKER, 2 X 115A", office: "SCH-BR-CHOM-T1515" },
+  { search: "SCHNEIDER CHOM QUAD BREAKER, 2 X 115A & 1 X 215A", office: "SCH-BR CHOM 1515215" },
+  { search: "SCHNEIDER CHOM QUAD BREAKER, 2 X 115A & 1 X 220A", office: "SCH-BR CHOM 1515220" },
+  { search: "SCHNEIDER CHOM QUAD BREAKER, 2 X 115A & 1 X 230A", office: "SCH-BR-CHOM-1515230" },
+  { search: "SIEMENS 15A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q215" },
+  { search: "SIEMENS 20A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q220" },
+  { search: "SIEMENS 30A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q230" },
+  { search: "SIEMENS 40A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q240" },
+  { search: "SIEMENS 50A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q250" },
+  { search: "SIEMENS 60A BREAKER, 240V DOUBLE-POLE", office: "SIE-BR-Q260" },
+  { search: "SIEMENS 15A ARC FAULT COMB BREAKER", office: "SIE-BR-QA115A-AFCI" },
+  { search: "SIEMANS QUAD BREAKER, 2 X 115A + 1 X 215A", office: "SIE-BR-Q21515" },
+  { search: "SIEMANS QUAD BREAKER, 2 X 115A + 1 X 220A", office: "SIE-BR-Q21520" },
+  { search: "SIEMENS BREAKER QUAD, 2 X 115A + 1 X 230A", office: "SIE-BR-Q21530" },
+  { search: "EATON 15A BREAKER, 240V, DOUBLE-POLE", office: "EATON-BR-215" },
+  { search: "EATON 20A BREAKER, 240V, DOUBLE-POLE", office: "EATON-BR-220" },
+  { search: "EATON 50A BREAKER, 240V, DOUBLE-POLE", office: "EATON-BR-250" },
+  { search: "EATON 60A BREAKER, 240V, DOUBLE-POLE", office: "EATON-BR-260" },
+  { search: "EATON 100A BREAKER, 240V, DOUBLE-POLE", office: "EATON-BR-2100" },
+  { search: "FPE 15A BREAKER, 240V, DOUBLE-POLE", office: "BR-FPE-215" },
+  { search: "FPE 20A BREAKER, 240V, DOUBLE-POLE", office: "BR-FPE-220" },
+  { search: "FPE 30A BREAKER, 240V, DOUBLE-POLE", office: "BR-FPE-230" },
+  // ===================== TECK CABLES =====================
+{ search: "TECK CABLE 14AWG-1C COPPER, 1000V, 14/1 TECK", office: "W-14-1C-TECK" },
+{ search: "TECK CABLE 14AWG-2C COPPER, 1000V, 14/2 TECK", office: "W-14-2C-TECK" },
+{ search: "TECK CABLE 14AWG-3C COPPER, 1000V, 14/3 TECK", office: "W-14-3C-TECK" },
+{ search: "TECK CABLE 14AWG-4C COPPER, 1000V, 14/4 TECK", office: "W-14-4C-TECK" },
+{ search: "TECK CABLE 14AWG-6C COPPER, 1000V, 14/6 TECK", office: "W-14-6C-TECK" },
+{ search: "TECK CABLE 14AWG-8C COPPER, 1000V, 14/8 TECK", office: "W-14-8C-TECK" },
+{ search: "TECK CABLE 14AWG-12C COPPER, 1000V, 14/12 TECK", office: "W-14-12C-TECK" },
+
+{ search: "TECK CABLE 12AWG-1C COPPER, 1000V, 12/1 TECK", office: "W-12-1C-TECK" },
+{ search: "TECK CABLE 12AWG-2C COPPER, 1000V, 12/2 TECK", office: "W-12-2C-TECK" },
+{ search: "TECK CABLE 12AWG-3C COPPER, 1000V, 12/3 TECK", office: "W-12-3C-TECK" },
+{ search: "TECK CABLE 12AWG-4C COPPER, 1000V, 12/4 TECK", office: "W-12-4C-TECK" },
+{ search: "TECK CABLE 12AWG-6C COPPER, 1000V, 12/6 TECK", office: "W-12-6C-TECK" },
+{ search: "TECK CABLE 12AWG-8C COPPER, 1000V, 12/8 TECK", office: "W-12-8C-TECK" },
+{ search: "TECK CABLE 12AWG-12C COPPER, 1000V, 12/12 TECK", office: "W-12-12C-TECK" },
+
+{ search: "TECK CABLE 10AWG-1C COPPER, 1000V, 10/1 TECK", office: "W-10-1C-TECK" },
+{ search: "TECK CABLE 10AWG-2C COPPER, 1000V, 10/2 TECK", office: "W-10-2C-TECK" },
+{ search: "TECK CABLE 10AWG-3C COPPER, 1000V, 10/3 TECK", office: "W-10-3C-TECK" },
+{ search: "TECK CABLE 10AWG-4C COPPER, 1000V, 10/4 TECK", office: "W-10-4C-TECK" },
+{ search: "TECK CABLE 10AWG-6C COPPER, 1000V, 10/6 TECK", office: "W-10-6C-TECK" },
+{ search: "TECK CABLE 10AWG-8C COPPER, 1000V, 10/8 TECK", office: "W-10-8C-TECK" },
+{ search: "TECK CABLE 10AWG-12C COPPER, 1000V, 10/12 TECK", office: "W-10-12C-TECK" },
+
+{ search: "TECK CABLE 8AWG-1C COPPER, 1000V, 8/1 TECK", office: "W-8-1C-TECK" },
+{ search: "TECK CABLE 8AWG-2C COPPER, 1000V, 8/2 TECK", office: "W-8-2C-TECK" },
+{ search: "TECK CABLE 8AWG-3C COPPER, 1000V, 8/3 TECK", office: "W-8-3C-TECK" },
+{ search: "TECK CABLE 8AWG-4C COPPER, 1000V, 8/4 TECK", office: "W-8-4C-TECK" },
+{ search: "TECK CABLE 8AWG-6C COPPER, 1000V, 8/6 TECK", office: "W-8-6C-TECK" },
+{ search: "TECK CABLE 8AWG-8C COPPER, 1000V, 8/8 TECK", office: "W-8-8C-TECK" },
+{ search: "TECK CABLE 8AWG-12C COPPER, 1000V, 8/12 TECK", office: "W-8-12C-TECK" },
+
+{ search: "TECK CABLE 6AWG-1C COPPER, 1000V, 6/1 TECK", office: "W-6-1C-TECK" },
+{ search: "TECK CABLE 6AWG-2C COPPER, 1000V, 6/2 TECK", office: "W-6-2C-TECK" },
+{ search: "TECK CABLE 6AWG-3C COPPER, 1000V, 6/3 TECK", office: "W-6-3C-TECK" },
+{ search: "TECK CABLE 6AWG-4C COPPER, 1000V, 6/4 TECK", office: "W-6-4C-TECK" },
+{ search: "TECK CABLE 6AWG-6C COPPER, 1000V, 6/6 TECK", office: "W-6-6C-TECK" },
+{ search: "TECK CABLE 6AWG-8C COPPER, 1000V, 6/8 TECK", office: "W-6-8C-TECK" },
+{ search: "TECK CABLE 6AWG-12C COPPER, 1000V, 6/12 TECK", office: "W-6-12C-TECK" },
+
+{ search: "TECK CABLE 4AWG-1C COPPER, 1000V, 4/1 TECK", office: "W-4-1C-TECK" },
+{ search: "TECK CABLE 4AWG-2C COPPER, 1000V, 4/2 TECK", office: "W-4-2C-TECK" },
+{ search: "TECK CABLE 4AWG-3C COPPER, 1000V, 4/3 TECK", office: "W-4-3C-TECK" },
+{ search: "TECK CABLE 4AWG-4C COPPER, 1000V, 4/4 TECK", office: "W-4-4C-TECK" },
+{ search: "TECK CABLE 4AWG-6C COPPER, 1000V, 4/6 TECK", office: "W-4-6C-TECK" },
+{ search: "TECK CABLE 4AWG-8C COPPER, 1000V, 4/8 TECK", office: "W-4-8C-TECK" },
+{ search: "TECK CABLE 4AWG-12C COPPER, 1000V, 4/12 TECK", office: "W-4-12C-TECK" },
+
+// ===================== NMD CABLES =====================
+{ search: "NMD CABLE 14AWG-1C COPPER, 14/1 NMD", office: "W-14-1C-NMD" },
+{ search: "NMD CABLE 14AWG-2C COPPER, 14/2 NMD", office: "W-14-2C-NMD" },
+{ search: "NMD CABLE 14AWG-3C COPPER, 14/3 NMD", office: "W-14-3C-NMD" },
+{ search: "NMD CABLE 14AWG-4C COPPER, 14/4 NMD", office: "W-14-4C-NMD" },
+{ search: "NMD CABLE 14AWG-6C COPPER, 14/6 NMD", office: "W-14-6C-NMD" },
+{ search: "NMD CABLE 14AWG-8C COPPER, 14/8 NMD", office: "W-14-8C-NMD" },
+{ search: "NMD CABLE 14AWG-12C COPPER, 14/12 NMD", office: "W-14-12C-NMD" },
+
+{ search: "NMD CABLE 12AWG-1C COPPER, 12/1 NMD", office: "W-12-1C-NMD" },
+{ search: "NMD CABLE 12AWG-2C COPPER, 12/2 NMD", office: "W-12-2C-NMD" },
+{ search: "NMD CABLE 12AWG-3C COPPER, 12/3 NMD", office: "W-12-3C-NMD" },
+{ search: "NMD CABLE 12AWG-4C COPPER, 12/4 NMD", office: "W-12-4C-NMD" },
+{ search: "NMD CABLE 12AWG-6C COPPER, 12/6 NMD", office: "W-12-6C-NMD" },
+{ search: "NMD CABLE 12AWG-8C COPPER, 12/8 NMD", office: "W-12-8C-NMD" },
+{ search: "NMD CABLE 12AWG-12C COPPER, 12/12 NMD", office: "W-12-12C-NMD" },
+
+{ search: "NMD CABLE 10AWG-1C COPPER, 10/1 NMD", office: "W-10-1C-NMD" },
+{ search: "NMD CABLE 10AWG-2C COPPER, 10/2 NMD", office: "W-10-2C-NMD" },
+{ search: "NMD CABLE 10AWG-3C COPPER, 10/3 NMD", office: "W-10-3C-NMD" },
+{ search: "NMD CABLE 10AWG-4C COPPER, 10/4 NMD", office: "W-10-4C-NMD" },
+{ search: "NMD CABLE 10AWG-6C COPPER, 10/6 NMD", office: "W-10-6C-NMD" },
+{ search: "NMD CABLE 10AWG-8C COPPER, 10/8 NMD", office: "W-10-8C-NMD" },
+{ search: "NMD CABLE 10AWG-12C COPPER, 10/12 NMD", office: "W-10-12C-NMD" },
+
+{ search: "NMD CABLE 8AWG-1C COPPER, 8/1 NMD", office: "W-8-1C-NMD" },
+{ search: "NMD CABLE 8AWG-2C COPPER, 8/2 NMD", office: "W-8-2C-NMD" },
+{ search: "NMD CABLE 8AWG-3C COPPER, 8/3 NMD", office: "W-8-3C-NMD" },
+{ search: "NMD CABLE 8AWG-4C COPPER, 8/4 NMD", office: "W-8-4C-NMD" },
+{ search: "NMD CABLE 8AWG-6C COPPER, 8/6 NMD", office: "W-8-6C-NMD" },
+{ search: "NMD CABLE 8AWG-8C COPPER, 8/8 NMD", office: "W-8-8C-NMD" },
+{ search: "NMD CABLE 8AWG-12C COPPER, 8/12 NMD", office: "W-8-12C-NMD" },
+
+{ search: "NMD CABLE 6AWG-1C COPPER, 6/1 NMD", office: "W-6-1C-NMD" },
+{ search: "NMD CABLE 6AWG-2C COPPER, 6/2 NMD", office: "W-6-2C-NMD" },
+{ search: "NMD CABLE 6AWG-3C COPPER, 6/3 NMD", office: "W-6-3C-NMD" },
+{ search: "NMD CABLE 6AWG-4C COPPER, 6/4 NMD", office: "W-6-4C-NMD" },
+{ search: "NMD CABLE 6AWG-6C COPPER, 6/6 NMD", office: "W-6-6C-NMD" },
+{ search: "NMD CABLE 6AWG-8C COPPER, 6/8 NMD", office: "W-6-8C-NMD" },
+{ search: "NMD CABLE 6AWG-12C COPPER, 6/12 NMD", office: "W-6-12C-NMD" },
+
+{ search: "NMD CABLE 4AWG-1C COPPER, 4/1 NMD", office: "W-4-1C-NMD" },
+{ search: "NMD CABLE 4AWG-2C COPPER, 4/2 NMD", office: "W-4-2C-NMD" },
+{ search: "NMD CABLE 4AWG-3C COPPER, 4/3 NMD", office: "W-4-3C-NMD" },
+{ search: "NMD CABLE 4AWG-4C COPPER, 4/4 NMD", office: "W-4-4C-NMD" },
+{ search: "NMD CABLE 4AWG-6C COPPER, 4/6 NMD", office: "W-4-6C-NMD" },
+{ search: "NMD CABLE 4AWG-8C COPPER, 4/8 NMD", office: "W-4-8C-NMD" },
+{ search: "NMD CABLE 4AWG-12C COPPER, 4/12 NMD", office: "W-4-12C-NMD" }
+
+  ];
+function filterParts(){
+  const q=normalize(document.getElementById("partSearch").value);
+  const res=document.getElementById("partResults");res.innerHTML="";
+  if(!q)return;
+  partsList.filter(p=>normalize(p.search).includes(q)||normalize(p.office).includes(q))
+  .forEach(p=>{
+    const div=document.createElement("div");
+    div.textContent=p.office;
+    div.onclick=()=>{addPart(p.office);res.innerHTML="";document.getElementById("partSearch").value="";};
+    res.appendChild(div);
+  });
+}
+function addPart(part){
+  const qty=prompt("Enter quantity for "+part+" (e.g. 2 rolls, 3 sets, etc.):","1");
+  if(!qty)return;
+  if(!currentVisit.requiredParts)currentVisit.requiredParts=[];
+  currentVisit.requiredParts.push({part,qty});
+  saveVisits();renderParts();
+}
+function addCustomPart(){
+  const name=prompt("Enter custom equipment name");if(!name)return;
+  const qty=prompt("Enter quantity for "+name+" (e.g. 2 rolls, etc.):","1");if(!qty)return;
+  if(!currentVisit.requiredParts)currentVisit.requiredParts=[];
+  currentVisit.requiredParts.push({part:name,qty});
+  saveVisits();renderParts();
+}
+function renderParts(){
+  if(!currentVisit)return;
+  if(!currentVisit.requiredParts)currentVisit.requiredParts=[];
+  const pt=document.getElementById("partsTable");pt.innerHTML="";
+  currentVisit.requiredParts.forEach((p,i)=>{
+    const row=document.createElement("tr");
+    row.innerHTML=`<td>${p.part}</td>
+      <td><input type="text" value="${p.qty}" onchange="updatePartQty(${i},this.value)"></td>
+      <td><button onclick="removePart(${i})">X</button></td>`;
+    pt.appendChild(row);
+  });
+}
+function updatePartQty(i,val){currentVisit.requiredParts[i].qty=val;saveVisits();}
+function removePart(i){if(!confirm("Remove this part?"))return;currentVisit.requiredParts.splice(i,1);saveVisits();renderParts();}
+
+
+/* ---------------- PDF EXPORT (FAST + 3-column GRID) ---------------- */
+
+/* utility: blob -> dataURL */
+function blobToDataURL(blob){
+  return new Promise(res=>{
+    const fr=new FileReader();
+    fr.onload=e=>res(e.target.result);
+    fr.readAsDataURL(blob);
+  });
+}
+
+/* compress image via canvas -> JPEG blob */
+async function compressImageBlob(blob, maxEdge = 1280, quality = 0.75){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const origW = img.naturalWidth || img.width;
+      const origH = img.naturalHeight || img.height;
+      const scale = Math.min(1, maxEdge / Math.max(origW, origH));
+      const w = Math.round(origW * scale);
+      const h = Math.round(origH * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => resolve(b), 'image/jpeg', quality);
+    };
+    img.onerror = (e)=>{
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
+/* throttle helper: process items in batches to avoid CPU spike */
+async function mapWithConcurrency(items, worker, concurrency = 4){
+  const results = new Array(items.length);
+  let idx = 0;
+  async function runner() {
+    while(true){
+      const i = idx++;
+      if(i >= items.length) return;
+      try {
+        results[i] = await worker(items[i], i);
+      } catch(e) {
+        results[i] = null;
+      }
+    }
+  }
+  const runners = [];
+  for(let i=0;i<concurrency;i++) runners.push(runner());
+  await Promise.all(runners);
+  return results;
+}
+
+/*
+  Preload + compress + dataURL all images used in an export.
+  refsArray: array of ids (may contain duplicates)
+  returns: cache { id: { dataUrl, width, height, size } }
+*/
+async function buildImageCacheForExport(refsArray){
+  const ids = Array.from(new Set((refsArray||[]).filter(Boolean)));
+  if(!ids.length) return {};
+  // load blobs from DB in parallel
+  const blobPromises = ids.map(id => getBlob(id).then(blob => ({ id, blob })).catch(()=>({ id, blob: null })));
+  const blobResults = await Promise.all(blobPromises);
+
+  // compress & convert to data URLs with limited concurrency
+  const toProcess = blobResults.filter(r => r.blob).map(r => ({ id: r.id, blob: r.blob }));
+
+  const processed = await mapWithConcurrency(toProcess, async item => {
+    try {
+      // compress
+      const compressed = await compressImageBlob(item.blob, 1280, 0.75);
+      // dataURL
+      const dataUrl = await blobToDataURL(compressed);
+      // get dimensions
+      const dims = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight });
+        i.onerror = rej;
+        i.src = dataUrl;
+      });
+      return { id: item.id, dataUrl, width: dims.w, height: dims.h, size: compressed.size };
+    } catch (e) {
+      console.warn('image processing failed for', item.id, e);
+      return { id: item.id, dataUrl: null };
+    }
+  }, 3); // 3 at a time
+
+  const cache = {};
+  for(const p of processed) if(p && p.dataUrl) cache[p.id] = { dataUrl: p.dataUrl, width: p.width, height: p.height, size: p.size };
+  return cache;
+}
+  function addTextBlock(doc,y,label,val){
+  if(val===undefined||val===null||String(val).trim()==="")return y;
+  doc.setFontSize(12);doc.setTextColor(0,0,0);
+  const lines=doc.splitTextToSize(`${label}: ${val}`,186);
+  for(const line of lines){if(y>280){doc.addPage();y=20;}doc.text(line,12,y);y+=6;}
+  y+=2;return y;
+}
+function addSection(doc,y,title){
+  doc.setFontSize(14);doc.setTextColor(11,105,255);
+  if(y>270){doc.addPage();y=20;}
+  doc.text(title,12,y);y+=7;
+  doc.setDrawColor(11,105,255);doc.setLineWidth(0.5);doc.line(12,y,198,y);
+  y+=8;doc.setFontSize(12);doc.setTextColor(0,0,0);
+  return y;
+}
+
+/*
+  addImagesGrid_FAST:
+  - 3 columns
+  - each column width ~= 58 mm on standard page (computed from page width)
+  - preserves aspect ratio
+  - auto-wrap rows and pages
+*/
+async function addImagesGrid_FAST(doc, y, refs, label, imageCache){
+  if(!refs || !refs.length) return y;
+  doc.setFontSize(12); doc.setTextColor(0,0,0);
+  doc.text(label, 12, y);
+  y += 8;
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const cols = 3;
+  const gap = 6;
+  const usableW = pageW - margin*2;
+  const cellW = (usableW - (gap * (cols - 1))) / cols; // mm in PDF units
+  // cellW will be ~58 for A4/Letter with these margins
+  let x = margin;
+  let rowY = y;
+  let currentRowMaxH = 0;
+  let colIndex = 0;
+
+  for(const id of refs){
+    const entry = imageCache && imageCache[id];
+    if(!entry || !entry.dataUrl) {
+      // skip missing image
+      colIndex++;
+      if(colIndex >= cols){
+        colIndex = 0;
+        x = margin;
+        rowY += currentRowMaxH + gap;
+        currentRowMaxH = 0;
+      } else {
+        x += cellW + gap;
+      }
+      continue;
+    }
+
+    // compute height maintaining aspect ratio
+    const ar = entry.width && entry.height ? (entry.height / entry.width) : 0.75;
+    const drawW = cellW;
+    const drawH = drawW * ar;
+
+    // if this image won't fit on the current page, start a new page
+    if(rowY + drawH > pageH - 20){
+      doc.addPage();
+      rowY = 20;
+      x = margin;
+      currentRowMaxH = 0;
+      colIndex = 0;
+    }
+
+    // draw
+    try {
+      doc.addImage(entry.dataUrl, 'JPEG', x, rowY, drawW, drawH);
+    } catch(e){
+      console.warn('jsPDF addImage failed for', id, e);
+    }
+
+    // update row metrics
+    if(drawH > currentRowMaxH) currentRowMaxH = drawH;
+    colIndex++;
+    if(colIndex >= cols){
+      // next row
+      x = margin;
+      rowY += currentRowMaxH + gap;
+      currentRowMaxH = 0;
+      colIndex = 0;
+    } else {
+      x += cellW + gap;
+    }
+  }
+
+  // after placing all images, return Y at the end of last row
+  // if we ended mid-row, increase rowY by currentRowMaxH
+  if(colIndex !== 0){
+    rowY += currentRowMaxH + 8;
+  } else {
+    rowY += 8;
+  }
+  return rowY;
+}
+
+/* ===== Export Button Handler (uses the new grid) ===== */
+document.getElementById("exportPDFBtn").onclick = async () => {
+   const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  if(!currentVisit)currentVisit={};
+  inputs.forEach(i=>{
+    if(i.type==="radio"){if(i.checked)currentVisit[i.name]=i.value;}
+    else if(i.type!=="file"){currentVisit[i.id]=i.value;}
+  });
+  if(typeof currentVisit.idx==="number")visits[currentVisit.idx]=currentVisit;
+  saveVisits();renderVisits();alert("Site Visit Saved!");
+
+  
+  alert("PDF Export beginning please wait");
+  try {
+const ok = await validateRequiredFields();
+  if (!ok) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 20;
+
+  // list out all image fields present in your form that need preloading
+  const imageFields = [
+    "svHomePic", "svAtticPics", "svEquipPics",
+    "svInvLocPic", "svEquipLocPics"
+  ];
+
+  // collect all refs into a single array (preserve duplicates if desired)
+  let allRefs = [];
+  for(const f of imageFields){
+    const arr = currentVisit?.[f] || [];
+    if(Array.isArray(arr)) allRefs = allRefs.concat(arr);
+  }
+
+  // build a cache of processed dataUrls & dims
+  const imageCache = await buildImageCacheForExport(allRefs);
+
+  // Build PDF body using your existing helpers (addSection, addTextBlock)
+  y = addSection(doc, y, "Site Info");
+  y = await addTextBlock(doc, y, "Site Title", currentVisit?.svSiteTitle);
+  y = await addTextBlock(doc, y, "Date", currentVisit?.svDate);
+  y = await addTextBlock(doc, y, "Team Members", currentVisit?.svTeam);
+  y = await addTextBlock(doc, y, "Time Departed Shop", currentVisit?.svDepart);
+  y = await addTextBlock(doc, y, "Arrival Time at Site", currentVisit?.svArrival);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svHomePic || [], "Home Pictures", imageCache);
+
+  y = addSection(doc, y, "Roof Assessment");
+  y = await addTextBlock(doc, y, "Roof Assessed", currentVisit?.svRoofAssessed);
+  y = await addTextBlock(doc, y, "Type of Roof", currentVisit?.svRoofType);
+  y = await addTextBlock(doc, y, "Condition of Roof", currentVisit?.svRoofCondition);
+  y = await addTextBlock(doc, y, "Drone Flight Completed", currentVisit?.svDrone);
+  y = await addTextBlock(doc, y, "Attic Inspection", currentVisit?.svAttic);
+  y = await addTextBlock(doc, y, "Top Chord Size", currentVisit?.svTopChord);
+  y = await addTextBlock(doc, y, "Bottom Chord Size", currentVisit?.svBottomChord);
+  y = await addTextBlock(doc, y, "Truss Spacing", currentVisit?.svTrussSpacing);
+  y = await addTextBlock(doc, y, "Top Chord Span", currentVisit?.svTopSpan);
+  y = await addTextBlock(doc, y, "Roof Access Issues", currentVisit?.svRoofIssues);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svAtticPics || [], "Attic Pictures", imageCache);
+
+  y = addSection(doc, y, "Electrical Service");
+  y = await addTextBlock(doc, y, "Service Inspection", currentVisit?.svServiceInspection);
+  y = await addTextBlock(doc, y, "Service Routing", currentVisit?.svRouting);
+  y = await addTextBlock(doc, y, "Electrical Service Size", currentVisit?.svServiceSize);
+  y = await addTextBlock(doc, y, "Main Panel Rating", currentVisit?.svBusRating);
+  y = await addTextBlock(doc, y, "Main Breaker Rating", currentVisit?.svMainBreaker);
+  y = await addTextBlock(doc, y, "Location of Utility Meter", currentVisit?.svMeterLoc);
+  y = await addTextBlock(doc, y, "Location of Main Panel", currentVisit?.svPanelLoc);
+  y = await addTextBlock(doc, y, "Distance Meter to Panel", currentVisit?.svDistance);
+  y = await addTextBlock(doc, y, "Existing Generator", currentVisit?.svGenerator);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svEquipPics || [], "Electrical Equipment Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Equipment Locations", currentVisit?.svEquipLocs);
+  y = await addTextBlock(doc, y, "Inverter Location", currentVisit?.svInvLoc);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svInvLocPic || [], "Inverter Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Battery Location", currentVisit?.svBattLoc);
+  y = await addTextBlock(doc, y, "Transfer Switch/TEG/BUI Location", currentVisit?.svTransferLoc);
+  y = await addTextBlock(doc, y, "Distance DC Cable Run", currentVisit?.svDCDistance);
+  y = await addTextBlock(doc, y, "Distance AC Inv-Switch", currentVisit?.svACInvSwitch);
+  y = await addTextBlock(doc, y, "Distance AC Switch-POC", currentVisit?.svACSwitchPOC);
+
+  y = await addImagesGrid_FAST(doc, y, currentVisit?.svEquipLocPics || [], "Equipment Location Pictures", imageCache);
+
+  y = await addTextBlock(doc, y, "Connection Details", currentVisit?.svConnDetails);
+
+  y = addSection(doc, y, "Site Requirements");
+  y = await addTextBlock(doc, y, "Is a DiR Required?", currentVisit?.svDiR);
+  y = await addTextBlock(doc, y, "Would a Meter Pull Work?", currentVisit?.svMeterPull);
+  y = await addTextBlock(doc, y, "Where is POC Being Made?", currentVisit?.svPOC);
+  y = await addTextBlock(doc, y, "Is Trenching Required?", currentVisit?.svTrenching);
+  y = await addTextBlock(doc, y, "Trench Distance", currentVisit?.svTrenchDistance);
+  y = await addTextBlock(doc, y, "Is Equipment Rental Required?", currentVisit?.svEquipRental);
+
+  // required parts
+  y = addSection(doc, y, "Required Equipment");
+  if(currentVisit?.requiredParts?.length){
+    currentVisit.requiredParts.forEach(p => { y = addTextBlock(doc, y, p.part, "Qty: " + p.qty); });
+  } else {
+    y = addTextBlock(doc, y, "No Equipment Listed", "");
+  }
+
+  y = addSection(doc, y, "Additional Details");
+  y = await addTextBlock(doc, y, "Additional Comments", currentVisit?.svAddComments);
+  y = await addTextBlock(doc, y, "Additional Cost Details", currentVisit?.svAddCosts);
+  y = await addTextBlock(doc, y, "Additional Permitting", currentVisit?.svAddPermits);
+  y = await addTextBlock(doc, y, "Additional Labour", currentVisit?.svAddLabour);
+  y = await addTextBlock(doc, y, "Additional Breakers", currentVisit?.svAddBreakers);
+  y = await addTextBlock(doc, y, "Additional Wire", currentVisit?.svAddWire);
+  y = await addTextBlock(doc, y, "Additional Items", currentVisit?.svAddItems);
+
+  y = addSection(doc, y, "Wrap Up");
+  y = await addTextBlock(doc, y, "Time Departed Site", currentVisit?.svDepartSite);
+  y = await addTextBlock(doc, y, "Return Time", currentVisit?.svReturn);
+
+  const safeTitle = (currentVisit?.svSiteTitle || "Site_Visit").replace(/[\\\/:*?"<>|]/g, "_");
+  doc.save(`${safeTitle}.pdf`);
+      } catch (err) {
+    console.error("PDF Export failed:", err);
+    alert("PDF export failed — check console for details."+ err);
+  alert("Export complete!");
+  }
+};
+  
+
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
