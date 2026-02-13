@@ -353,6 +353,164 @@ const partsList=[{search:"6/3 nmd",office:"W-NMD90-6/3C"},{search:"1 inch teck c
   { search:"THORNOVA TS-BBT54 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL - QTY 682", office:"THOR-TS-BBT54-500W" },
   { search:"LONGI ‐ LR5‐54HPB‐410 BLK, 54/10CELL, MONO, 30MM, STAUBLI MC4", office:"LON-LR5-54HBP-410BLK" },
   { search:"LONGI - LR7-54HGBB-440M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-440M" },
+  { search:"LONGI - LR7-54HGBB-445M, 54/10t STORE_KEY="site_visits";
+let visits=JSON.parse(localStorage.getItem(STORE_KEY)||"[]");
+let currentVisit=null;
+function saveVisits(){try{localStorage.setItem(STORE_KEY,JSON.stringify(visits));}catch(e){alert("Storage full. Cannot save more visits.");}}
+function renderVisits(){const c=document.getElementById("visitsContainer");c.innerHTML="";if(!visits.length){c.innerHTML="<i>No site visits yet</i>";return;}visits.forEach((v,i)=>{const d=document.createElement("div");d.className="card";d.style.cursor="pointer";d.innerHTML=`${v.svSiteTitle||"(untitled)"} — ${v.svDate||""} <button onclick="deleteVisit(${i});event.stopPropagation()">❌</button>`;d.onclick=()=>openVisit(i);c.appendChild(d);});}
+function deleteVisit(i){if(confirm("Delete this visit?")){visits.splice(i,1);saveVisits();renderVisits();}}
+function newVisit(){currentVisit={};visits.push(currentVisit);saveVisits();openVisit(visits.length-1);}
+
+/* ---------------- OPEN VISIT ---------------- */
+async function openVisit(idx){
+  currentVisit=visits[idx];currentVisit.idx=idx;
+  document.getElementById("jobListView").classList.add("hidden");
+  document.getElementById("siteVisitForm").classList.remove("hidden");
+  const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  for(const el of inputs){
+    el.classList.remove('missing');
+    if(el.type==="radio"){
+      const radios=document.getElementsByName(el.name);
+      radios.forEach(r=>r.checked=(r.value===currentVisit[el.name]));
+    } else if(el.type!=="file"){
+      el.value=currentVisit[el.id]||"";
+    }
+  }
+  const imageInputs=document.querySelectorAll('input[type="file"]');
+  for(const input of imageInputs){
+    const refs=currentVisit[input.id]||[];
+    const previewDiv=document.getElementById(input.id+"Preview");
+    clearPreview(previewDiv);
+    for(const id of refs){
+      const blob=await getBlob(id);
+      if(blob) renderPreview(previewDiv, URL.createObjectURL(blob), id, input.id);
+    }
+  }
+}
+
+/* ---------------- NAVIGATION ---------------- */
+function backToList(){document.getElementById("jobListView").classList.remove("hidden");document.getElementById("siteVisitForm").classList.add("hidden");}
+document.getElementById("newVisitBtn").onclick=newVisit;
+document.getElementById("backListBtn").onclick=backToList;
+
+/* ---------------- FILE HANDLERS ---------------- */
+document.querySelectorAll('input[type="file"]').forEach(input=>{
+  const previewDiv=document.getElementById(input.id+"Preview");
+  input.addEventListener('change',async e=>{
+    clearPreview(previewDiv);
+    const files=Array.from(e.target.files||[]);
+    const ids=[];
+    for(const f of files){
+      const id=genId();await putBlob(id,f);ids.push(id);renderPreview(previewDiv,URL.createObjectURL(f), id, input.id);
+    }
+    if(!currentVisit)currentVisit={};
+    currentVisit[input.id]=ids;saveVisits();
+  });
+});
+
+/* ---------------- SAVE VISIT ---------------- */
+document.getElementById("saveVisitBtn").onclick=()=>{
+  const inputs=document.querySelectorAll("#siteVisitForm input, #siteVisitForm textarea");
+  if(!currentVisit)currentVisit={};
+  inputs.forEach(i=>{
+    if(i.type==="radio"){if(i.checked)currentVisit[i.name]=i.value;}
+    else if(i.type!=="file"){currentVisit[i.id]=i.value;}
+  });
+  if(typeof currentVisit.idx==="number")visits[currentVisit.idx]=currentVisit;
+  saveVisits();renderVisits();alert("Site Visit Saved!");
+};
+
+
+/* ---------------- VALIDATE REQUIRED ---------------- */
+async function validateRequiredFields() {
+  const missing = [];
+  const required = document.querySelectorAll('[data-required="true"]');
+
+  for (const el of required) {
+    el.classList.remove('missing');
+
+    // Get user-friendly label text
+    const label = document.querySelector(`label[for="${el.id}"]`) || el.closest("label");
+    const labelText = label ? label.textContent.replace(/\s*:\s*$/, "").trim() : el.id;
+
+    if (el.type === "file") {
+      const refs = currentVisit?.[el.id] || [];
+      if (!refs.length) {
+        missing.push(labelText);
+        el.classList.add('missing');
+        if (label) label.classList.add('missing');
+      }
+    } else if (el.type === "radio") {
+      const group = document.getElementsByName(el.name);
+      const checked = Array.from(group).some(r => r.checked);
+      if (!checked) {
+        missing.push(labelText || el.name);
+        group.forEach(r => r.classList.add('missing'));
+        if (label) label.classList.add('missing');
+      }
+    } else if (!el.value.trim()) {
+      missing.push(labelText);
+      el.classList.add('missing');
+      if (label) label.classList.add('missing');
+    }
+  }
+
+  if (missing.length) {
+    alert("Cannot export PDF. Missing required fields:\n- " + missing.join("\n- "));
+    return false;
+  }
+
+  return true;
+}
+
+/* ---------------- REQUIRED EQUIPMENT ---------------- */
+function normalize(str){return str.toLowerCase().replace(/[^a-z0-9]/g,'');}
+const partsList=[{search:"6/3 nmd",office:"W-NMD90-6/3C"},{search:"1 inch teck connector",office:"TEKCON-100"},{search:"HB SKYRAIL3 FLUSH MOUNT- 5.945M LONG EXTRUSION FOR CLICLOC CLAMP", office:"HB-8395-5945"},
+  {search:"FLUSH MOUNT SPLICE BAR FOR SKYRAIL3 WITH BONDING WASHER", office:"HB-1946"},
+  { search:"HB FLASHGUARD FLASHING KIT - MILL FINISH", office:"HB-99103" },
+  { search:"HBSOLAR STANDING SEAM CLAMP WITH ONE TOP HOLE, 2 SIDE HOLES", office:"HB-98121-02" },
+  { search:"HBSOLAR MB2 MIRACLE CONNECTING BRACKET KIT (4.7MM THICK)", office:"HB-92873" },
+  { search:"HBSOLAR MID-CLAMP UNIVERSAL WITH INTEGRATED BONDING/GROUNDING", office:"HB-1421b_MC" },
+  { search:"HB END CLAMP FOR 30MM FRAME THICKNESS WITH INTEGRATED BONDING/ GROUNDING", office:"HB-1422b-EC_30" },
+  { search:"END CLAMP 32MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_32" },
+  { search:"END CLAMP 35MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_35" },
+  { search:"END CLAMP 40MM FRAME THICKNESS WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-EC_40" },
+  { search:"HBSOLAR MID-CLAMP UNIVERSAL BLACK ANODIZED WITH INTEGRATED BONDING/GROUNDING", office:"HB-1421b_MCB" },
+  { search:"BLACK END CLAMP 35MM FRAME THICKNESS, WITH INTEGRATED BONDING/GROUNDING NODES (ETL RATED)", office:"HB-1422b-ECB_35" },
+  { search:"TBOLT M8 X 20mm", office:"HB-3220" },
+  { search:"T-BOLT M8 X 20MM FOR T8 SLOT SS - FOR MICROINVERTER W/ SKYRAIL 3", office:"HB-3220 T8" },
+  { search:"HB FLANGE NUT M8 WITH SERRATION", office:"HB-3501" },
+  { search:"HBSOLAR L-FOOT, STANDARD", office:"HB-1831" },
+  { search:"HB SOLAR L-FOOT- KITTED FOR HANGAR BOLT (W T-BOLT/NUT)", office:"HB-91831" },
+  { search:"L FOOT KITTED FOR ROOF CHANNEL/AG BRACKET (WITH SLIDE NUT/T-BOLT/NUT", office:"HB-91831-01" },
+  { search:"HBSOLAR ROOF CHANNEL TYPE C 6.1M LONG WITH BUTYL TAPE", office:"HB-98330-6100" },
+  { search:"HB SOLAR AG BRACKET WITH BUTYL TAPE", office:"HB-8321" },
+  { search:"KINETIC SOLAR SQUIRREL GUARD 6\"\" 100FT ROLL", office:"KIN-KHSG6-M" },
+  { search:"KINETIC SOLAR SQUIRREL GUARD 8\"\" 100FT ROLL", office:"KIN-KHSG8-M" },
+  { search:"KINETIC STAINLESS J HOOK FOR SQUIRREL GUARD PACK OF 100", office:"KIN-KHSG-J" },
+  { search:"ALL-BLACK SOLATRIM GEN2 BARRIER PANEL 5.5\"\" X 48\"\", 100FT ROLL", office:"SOLATRIM-GEN2" },
+  { search:"S-5! N MINI STANDING SEAM CLAMP - FOR NAIL STRIP ROOFS - 1\"\"", office:"S5-N-MINI" },
+  { search:"S-5!-N MINI STANDING SEAM CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-N-1.5-MINI-WB" },
+  { search:"S-5!-N MINI STANDING SEAM CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-NH-1.5-MINI-WB" },
+  { search:"S-5! S STANDARD CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-S" },
+  { search:"S-5! S MINI CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-S-MINI" },
+  { search:"S-5! E MINI CLAMP - MOUNTING CLAMP FOR STANDING SEAM ROOFS", office:"S5-E-MINI" },
+  { search:"S-5!-S M8 BOLT 16MM", office:"S5-M8 BOLT" },
+  { search:"S5 PROTEA BRACKER EXPOSED FASTENER", office:"S5-Protea Bracket" },
+  { search:"S-5! CORRUBRACKET - MOUNTING BRACKET FOR CORRUGATED STEEL ROOF", office:"S5-CORRU" },
+  { search:"Metal to Wood screws 2.5\"\" length", office:"S5 Metal to Wood screws 2.5\"\" length" },
+  { search:"ROOF-TECH MINI 2 BASE + 2 SCREWS, COMES WITH FLANGE BOLT & NUT", office:"RT-RT2-MINI2" },
+  { search:"ROOF-TECH MINI 2 SCREW 5X60 FOR MINI 2 BASE (SOLD AS 100 PACK)", office:"RT-RT2-04-SD5-60" },
+  { search:"ROOF TECH ROOF ENTRY BRACKET - WIRE MANAGEMENT SYSTEM", office:"RT-RT3-04-RFEBBK" },
+  { search:"EJOT 180/70 FZD SOLAR FASTENER SCREW FOR TIMBER SUBSTRUCTURE", office:"EJOT-JA3-SB-8.0-180/70" },
+  { search:"EJOT 130/70 FZD SOLAR FASTENER SCREW FOR TIMBER SUBSTRUCTURE", office:"EJOT-JA3-SB-8.0-130/70" },
+  { search:"ORKAN STORM WASHER TRAPEZOIDAL 35-47 ALU-RAIL, VE 100", office:"EJOT-ORKAN-KALOTTE-35-47" },
+  { search:"THORNOVA TS-BBT54 425W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BBT54-425W" },
+  { search:"THORNOVA TS-BB66 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BB66-500W" },
+  { search:"THORNOVA TS-BGT54 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL", office:"THOR-TS-BGT54-500W" },
+  { search:"THORNOVA TS-BBT54 500W SOLAR PV MODULES, BLACK FRAME-BLACK BACKSHEET, BIFACIAL - QTY 682", office:"THOR-TS-BBT54-500W" },
+  { search:"LONGI ‐ LR5‐54HPB‐410 BLK, 54/10CELL, MONO, 30MM, STAUBLI MC4", office:"LON-LR5-54HBP-410BLK" },
+  { search:"LONGI - LR7-54HGBB-440M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-440M" },
   { search:"LONGI - LR7-54HGBB-445M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-445M" },
   { search:"LONGI - LR7-54HGBB-450M, 54/10 CELL, (ALL BLACK - BIFACIAL) nTOPCON", office:"LON-LR7-54HGBB-450M" },
   { search:"LONGI - LR4-72HPH-450 72/144CELL MONO, 35mm", office:"LON-LR4-72HPH 450" },
@@ -2092,6 +2250,7 @@ const ok = await validateRequiredFields();
 </script>
 </body>
 </html>
+
 
 
 
