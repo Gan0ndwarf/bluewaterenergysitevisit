@@ -136,6 +136,7 @@ label.missing{color:red;}
   </table>
 
   <h3>Additional Details</h3>
+   <label>Networking Equipment Location/Info:<br><textarea id="svNetworking"></textarea></label>
   <label>Additional Comments:<br><textarea id="svAddComments"></textarea></label>
   <label>Additional Costs:<br><textarea id="svAddCosts"></textarea></label>
   <label>Additional Permitting:<br><textarea id="svAddPermits"></textarea></label>
@@ -460,7 +461,9 @@ const partsList= [{search:"6/3 nmd",office:"W-NMD90-6/3C"},{search:"1 inch teck 
   { search:'1/4" PVC LB FITTING', office:'PVC-LB03' },
   { search:'1/4" PVC T FITTING', office:'PVC-T03' },
   { search:'1/4" PVC PIPE STRAP', office:'PVC-PS03' },
-
+ {search:"EATON 200A 2 Inch Hub Adapter", office:"EATON 2 Inch Hub Adapter DS200H1"},
+   {search:"EATON 200A 1-1/4 Inch Hub Adapter", office:"EATON 1-1/4 Inch Hub Adapter DS125H1"},  
+   {search:"250 MCM Teck, 250 KCMIL Teck Cable",office:"250 KCMIL Teck Cable Aluminum"},
 
    { search:"EMPORIA VUE GENERATION 3  WHOLE HOME ENERGY MONITOR WITH 2 X 200A CTS and 16 Branch Circuit CTs", office:"EMP-VUE 3 16 Branch Circuit" },
 
@@ -1658,6 +1661,7 @@ const ok = await validateRequiredFields();
   }
 
   y = addSection(doc, y, "Additional Details");
+  y = await addTextBlock(doc, y, "Networking info/location", currentVisit?.svNetworking);
   y = await addTextBlock(doc, y, "Additional Comments", currentVisit?.svAddComments);
   y = await addTextBlock(doc, y, "Additional Cost Details", currentVisit?.svAddCosts);
   y = await addTextBlock(doc, y, "Additional Permitting", currentVisit?.svAddPermits);
