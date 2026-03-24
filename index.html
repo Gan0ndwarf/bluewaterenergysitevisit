@@ -84,6 +84,8 @@ label.missing{color:red;}
   <label>Inspection:<br><textarea id="svServiceInspection"></textarea></label>
   <label>Routing:<br><textarea id="svRouting"></textarea></label>
   <label>Service Size:<br><input type="text" id="svServiceSize"></label>
+  <label>Main Panel Make:<br><input type="text" id="svPanelMake"></label>
+  <label>Main Panel Model:<br><input type="text" id="svPanelModel"></label>
   <label>Main Panel Rating:<br><input type="text" id="svBusRating"></label>
   <label>Main Breaker Rating:<br><input type="text" id="svMainBreaker"></label>
   <label>Utility Meter Location:<br><textarea id="svMeterLoc"></textarea></label>
@@ -1620,6 +1622,8 @@ const ok = await validateRequiredFields();
   y = await addTextBlock(doc, y, "Service Inspection", currentVisit?.svServiceInspection);
   y = await addTextBlock(doc, y, "Service Routing", currentVisit?.svRouting);
   y = await addTextBlock(doc, y, "Electrical Service Size", currentVisit?.svServiceSize);
+  y = await addTextBlock(doc, y, "Main Panel Make", currentVisit?.svPanelMake);
+  y = await addTextBlock(doc, y, "Main Panel Model", currentVisit?.svPanelModel);
   y = await addTextBlock(doc, y, "Main Panel Rating", currentVisit?.svBusRating);
   y = await addTextBlock(doc, y, "Main Breaker Rating", currentVisit?.svMainBreaker);
   y = await addTextBlock(doc, y, "Location of Utility Meter", currentVisit?.svMeterLoc);
